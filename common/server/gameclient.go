@@ -1,4 +1,4 @@
-package botbox
+package server
 
 import (
 	"fmt"
@@ -44,7 +44,10 @@ func (c *SynchronizedGameClient) Listen() {
 		for {
 			select {
 			case msg := <-c.turn:
-				websocket.JSON.Send(c.conn, msg)
+				err := websocket.JSON.Send(c.conn, msg)
+				if err != nil {
+					fmt.Println("Error:", err)
+				}
 				//case done := <-c.done:
 				//return
 			}

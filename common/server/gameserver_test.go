@@ -1,4 +1,4 @@
-package botbox
+package server
 
 import (
 	"encoding/json"

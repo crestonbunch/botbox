@@ -1,4 +1,4 @@
-package botbox
+package server
 
 type GameState interface {
 	// Return a JSON-serializable representatino of actions that the player p can
@@ -8,15 +8,15 @@ type GameState interface {
 	// Commit the given action a (in JSON) for player p.
 	Do(p int, a interface{})
 
-	// Get the visible state in JSON format for a given player.
-	View(p int) []byte
+	// Get a JSON-serializable state of the game, as seen by player p
+	View(p int) interface{}
 
 	// Check if the game is over yet or not.
 	Finished() bool
 }
 
 type GameMessage struct {
-	Type    []byte      `json:"type"`
+	Type    string      `json:"type"`
 	Payload interface{} `json:"payload"`
 }
 

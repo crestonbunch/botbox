@@ -1,16 +1,16 @@
-package tron
+package main
 
 import (
-	"botbox"
-	"golang.org/x/net/websocket"
+	"botbox/common/server"
+	"botbox/games/tron"
 	"net/http"
 )
 
 // Setup the tron server to listen to clients.
 func main() {
-	server := botbox.NewSynchronizedGameServer(NewTwoPlayerTron(32, 32), 2)
+	s := server.NewSynchronizedGameServer(tron.NewTwoPlayerTron(32, 32), 2)
 
-	go server.Start("/")
+	go s.Start("/")
 
 	err := http.ListenAndServe(":12345", nil)
 	if err != nil {

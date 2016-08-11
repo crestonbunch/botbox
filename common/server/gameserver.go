@@ -1,4 +1,4 @@
-package botbox
+package server
 
 import (
 	"fmt"
@@ -101,6 +101,10 @@ func (s *SynchronizedGameServer) Listen() {
 
 			select {
 			case <-s.done:
+				// broadcast the end results
+				for i, c := range s.clients {
+					c.SignalTurn(s.turn, []interface{}{}, s.state.View(i))
+				}
 				return
 			default:
 				// wait for actions from every player to commit them simultaneously
