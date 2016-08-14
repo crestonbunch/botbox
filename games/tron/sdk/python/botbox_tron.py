@@ -8,13 +8,21 @@ WS_SERVER_URL = 'ws://localhost:12345/'
 def start(turn_handler):
     """Start the client listening to the game. Pass in a function
     that accepts the available actions and the current state of the game,
-    and returns the action to take. The SDK will handle the rest."""
+    and returns the action to take. The SDK will handle the rest.
+    Checks if any command-line arguments are passed when running,
+    if there are any, they are assumed to be client keys that are
+    sent to the server for connecting."""
+
+
+    headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
+    if headers: print("Using headers", headers)
     ws = websocket.WebSocketApp(
         WS_SERVER_URL,
         on_open = _on_open,
         on_message = lambda ws, msg: _on_message(ws, msg, turn_handler),
         on_error = _on_error,
-        on_close = _on_close
+        on_close = _on_close,
+        header = headers
     )
 
     ws.run_forever()

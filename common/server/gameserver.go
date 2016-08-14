@@ -26,8 +26,9 @@ type RealTimeGameServer struct {
 // They must provide a state struct that implements the
 // GameState interface. Synchronized means that the players move simultaneously,
 // on the same turn, and have no idea what move the other player will make.
-// TODO: pass a secret key for each client that is to be in the game so that
-// a malicious client does not try to spawn additional connections to the server
+// If the auth flag is set, then only clients which pass a valid key in the
+// HTTP Authentication header will be allowed to communicate (this prevents
+// malicious users from pretending to be multiple agents).
 type SynchronizedGameServer struct {
 	state   GameState
 	clients []*SynchronizedGameClient
@@ -35,6 +36,8 @@ type SynchronizedGameServer struct {
 	delete  chan *SynchronizedGameClient
 	done    chan bool
 	err     chan error
+	auth    bool
+	keys    map[string]*SynchronizedGameClient
 }
 
 func NewSynchronizedGameServer(state GameState, players int) *SynchronizedGameServer {
@@ -45,6 +48,30 @@ func NewSynchronizedGameServer(state GameState, players int) *SynchronizedGameSe
 		make(chan *SynchronizedGameClient),
 		make(chan bool),
 		make(chan error),
+		false,
+		nil,
+	}
+}
+
+// Create a new synchronized game with a list of authentication keys to expect
+// from clients. Any client that does not send one of these keys will be
+// rejected. Only one key is allowed per client, and there must be exactly the
+// same number of players as there are keys.
+func NewAuthenticatedSynchronizedGameServer(state GameState, keys []string) *SynchronizedGameServer {
+	// all authenticated connections start out nil
+	keyMap := map[string]*SynchronizedGameClient{}
+	for _, k := range keys {
+		keyMap[k] = nil
+	}
+	return &SynchronizedGameServer{
+		state,
+		make([]*SynchronizedGameClient, 0, len(keys)),
+		0,
+		make(chan *SynchronizedGameClient),
+		make(chan bool),
+		make(chan error),
+		true,
+		keyMap,
 	}
 }
 
@@ -62,10 +89,31 @@ func (s *SynchronizedGameServer) Start(path string) {
 				s.err <- err
 			}
 		}()
-		fmt.Println("Client connected")
-		client := NewSynchronizedGameClient(ws, s)
-		s.Register(client)
-		client.Listen()
+		key := ws.Request().Header.Get("Authentication")
+		if v, ok := s.keys[key]; ok && s.auth {
+			// client sent valid key, and server requires authentication
+			if v != nil {
+				// client has already connected before -- reject
+				fmt.Println("Client rejected -- already connected.")
+				ws.Close()
+			} else {
+				fmt.Println("Client authenticated")
+				client := NewSynchronizedGameClient(ws, s)
+				s.Register(client)
+				s.keys[key] = client
+				client.Listen()
+			}
+		} else if !ok && s.auth {
+			// client sent invalid key, and server requires authentication
+			fmt.Println("Client rejected -- invalid key.")
+			ws.Close()
+		} else {
+			// no authentication required
+			fmt.Println("Client connected")
+			client := NewSynchronizedGameClient(ws, s)
+			s.Register(client)
+			client.Listen()
+		}
 	}))
 
 	fmt.Println("Waiting for clients to connect")
