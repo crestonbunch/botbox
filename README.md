@@ -40,7 +40,6 @@ import random
 
 def move(p, actions, state):
     """A trivial agent that randomly picks an action."""
-    player = state['players']
 
     # find moves that are safe to make
     safe = botbox_tron.safe_moves(p, state)
