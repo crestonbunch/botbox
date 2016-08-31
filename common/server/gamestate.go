@@ -22,6 +22,7 @@ type GameMessage struct {
 
 type TurnMessage struct {
 	Turn    int         `json:"turn"`
+	Player  int         `json:"player"`
 	Actions interface{} `json:"actions"`
 	State   interface{} `json:"state"`
 }

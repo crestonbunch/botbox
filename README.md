@@ -38,11 +38,20 @@ Then write a simple Tron agent, e.g.:
 import botbox_tron
 import random
 
-def move(actions, state):
+def move(p, actions, state):
     """A trivial agent that randomly picks an action."""
+    player = state['players']
+
+    # find moves that are safe to make
+    safe = botbox_tron.safe_moves(p, state)
+    # find the intersection of valid and safe moves
+    actions = [a for a in actions if a in safe]
+
     if actions:
+        # pick a valid, safe action
         return random.choice(actions)
     else:
+        # can't do anything
         return
 
 # Start the agent with our simple move function

@@ -81,7 +81,17 @@ func (s *TronState) Actions(p int) interface{} {
 // Commit an action for a player. The direction will be sent as a generic
 // interface, and casted into the expected string
 func (s *TronState) Do(p int, dir interface{}) {
+
+	// validate type
+	switch dir.(type) {
+	case nil:
+		// player has not made a move, the punishment is death
+		s.Kill(p)
+		return
+	}
+
 	a := dir.(string)
+
 	// to the integer to string conversion for coordinates
 	x := strconv.Itoa(s.Players[p].X)
 	y := strconv.Itoa(s.Players[p].Y)
@@ -114,8 +124,7 @@ func (s *TronState) Do(p int, dir interface{}) {
 		if v, ok := s.Cells[x]; ok {
 			if _, ok := v[y]; ok {
 				// if the player ran over a tail -- kill him
-				s.Players[p].X = -1
-				s.Players[p].Y = -1
+				s.Kill(p)
 			}
 		}
 
@@ -125,10 +134,12 @@ func (s *TronState) Do(p int, dir interface{}) {
 				// TODO: this does not work if 3 or more players overlap
 				o.X = -1
 				o.X = -1
-				s.Players[p].X = -1
-				s.Players[p].Y = -1
+				s.Kill(p)
 			}
 		}
+	} else {
+		// player has made an invalid action -- the punishment is death
+		s.Kill(p)
 	}
 }
 
@@ -156,4 +167,10 @@ func (s *TronState) Validate(p int, a string) bool {
 		}
 	}
 	return false
+}
+
+// Kill a player.
+func (s *TronState) Kill(p int) {
+	s.Players[p].X = -1
+	s.Players[p].Y = -1
 }

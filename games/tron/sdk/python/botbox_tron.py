@@ -5,6 +5,24 @@ import sys
 
 WS_SERVER_URL = 'ws://localhost:12345/'
 
+def safe_moves(p, state):
+    """Determine what moves are safe for a player to make. Returns a list of
+    valid actions that player p can make in the given state."""
+
+    x, y = state['players'][p]['x'], state['players'][p]['y']
+
+    moves = []
+    actions = [(1, 0, 'east'),
+            (-1, 0, 'west'),
+            (0, -1, 'north'),
+            (0, 1, 'south')]
+    for dx, dy, move in actions:
+        tx, ty = str(x + dx), str(y + dy)
+        if tx not in state['cells'] or ty not in state['cells'][tx]:
+            moves.append(move)
+
+    return moves
+
 def start(turn_handler):
     """Start the client listening to the game. Pass in a function
     that accepts the available actions and the current state of the game,
@@ -13,9 +31,7 @@ def start(turn_handler):
     if there are any, they are assumed to be client keys that are
     sent to the server for connecting."""
 
-
     headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
-    if headers: print("Using headers", headers)
     ws = websocket.WebSocketApp(
         WS_SERVER_URL,
         on_open = _on_open,
@@ -34,6 +50,7 @@ def _on_message(ws, msg, turn_handler):
 
     def x():
         parsed = json.loads(msg)
+        player = parsed['player']
         actions = parsed['actions']
         state = parsed['state']
 
@@ -50,7 +67,7 @@ def _on_message(ws, msg, turn_handler):
                     sys.stdout.write(' ')
             sys.stdout.write('\n')
 
-        action = turn_handler(actions, state)
+        action = turn_handler(player, actions, state)
         response = {"type":"do", "payload":action}
 
         ws.send(json.dumps(response))

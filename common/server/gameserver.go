@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"golang.org/x/net/websocket"
 	"net/http"
+	"os"
 )
 
 // A generic websocket server for games that are turn-based. Players make
@@ -143,15 +144,15 @@ func (s *SynchronizedGameServer) Listen() {
 			} else {
 				// broadcast the current turn
 				for i, c := range s.clients {
-					c.SignalTurn(s.turn, s.state.Actions(i), s.state.View(i))
+					c.SignalTurn(s.turn, i, s.state.Actions(i), s.state.View(i))
 				}
 			}
 
 			select {
 			case <-s.done:
-				// broadcast the end results
+				// broadcast the end results to clients
 				for i, c := range s.clients {
-					c.SignalTurn(s.turn, []interface{}{}, s.state.View(i))
+					c.SignalTurn(s.turn, i, []interface{}{}, s.state.View(i))
 				}
 				return
 			default:
@@ -174,6 +175,8 @@ func (s *SynchronizedGameServer) Listen() {
 	for {
 		select {
 		case <-s.done:
+			// This is the easiest way to stop the HTTP server.
+			os.Exit(0)
 			return
 			//case client := <-s.delete:
 			// not implemented

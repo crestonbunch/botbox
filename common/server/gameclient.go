@@ -9,11 +9,9 @@ import (
 // This is a client for a synchronized game server. Clients must decided on an
 // action to take each turn.
 // When a new turn comes around, the server will send a message that looks like:
-// {type: "turn", payload: 3}, where the payload is the turn number.
-// Each turn a client can send a message that looks like: {type: "actions"} or
-// {type: "view"} to get a list of valid actions and the current game state,
-// respectively. Once the agent is ready to move, it can send a message that
-// looks like: {type: "do", payload: [-1,0,1,0]}, where the payload is the
+// {turn: 10, player: 1, actions: [..], state: {..}}
+// Clients must send a response that looks like:
+// looks like: {type: "do", payload: "..."}, where the payload is the
 // specific action to take.
 type SynchronizedGameClient struct {
 	conn   *websocket.Conn
@@ -35,8 +33,8 @@ func NewSynchronizedGameClient(ws *websocket.Conn, server *SynchronizedGameServe
 	}
 }
 
-func (c *SynchronizedGameClient) SignalTurn(num int, actions interface{}, state interface{}) {
-	c.turn <- &TurnMessage{num, actions, state}
+func (c *SynchronizedGameClient) SignalTurn(num int, player int, actions interface{}, state interface{}) {
+	c.turn <- &TurnMessage{num, player, actions, state}
 }
 
 func (c *SynchronizedGameClient) Listen() {
