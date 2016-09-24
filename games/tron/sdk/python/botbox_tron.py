@@ -2,8 +2,11 @@ import websocket
 import json
 import _thread
 import sys
+import os
 
-WS_SERVER_URL = 'ws://localhost:12345/'
+WS_SERVER_SCHEME = 'ws'
+WS_SERVER_URL = 'localhost'
+WS_SERVER_PORT = '12345'
 
 def safe_moves(p, state):
     """Determine what moves are safe for a player to make. Returns a list of
@@ -32,8 +35,17 @@ def start(turn_handler):
     sent to the server for connecting."""
 
     headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
+
+    # get the URL for the server from an environment variable if it is set,
+    # otherwise use the default localhost
+    if os.environ.get('BOTBOX_SERVER'):
+        url = (WS_SERVER_SCHEME + '://'
+            + os.environ['BOTBOX_SERVER'] + ':' + WS_SERVER_PORT)
+    else:
+        url = WS_SERVER_SCHEME + '://' + WS_SERVER_URL + ':' + WS_SERVER_PORT
+
     ws = websocket.WebSocketApp(
-        WS_SERVER_URL,
+        url,
         on_open = _on_open,
         on_message = lambda ws, msg: _on_message(ws, msg, turn_handler),
         on_error = _on_error,
