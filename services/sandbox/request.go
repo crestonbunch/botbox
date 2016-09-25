@@ -2,7 +2,6 @@ package sandbox
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 )
@@ -56,12 +55,10 @@ func FromHttp(r *http.Request) (*MatchRequest, error) {
 		return nil, err
 	}
 
-	fmt.Println("Opening server!")
 	serverArchive, err := OpenArchive(server)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Opened server!")
 
 	clientArchives := []Archive{}
 	// open the client readers
@@ -75,7 +72,6 @@ func FromHttp(r *http.Request) (*MatchRequest, error) {
 			return nil, err
 		}
 		clientArchives = append(clientArchives, archive)
-		fmt.Println("Opened client!")
 	}
 
 	return &MatchRequest{serverArchive, clientArchives}, nil

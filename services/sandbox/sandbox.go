@@ -20,8 +20,6 @@ const ServerDropDir = "/botbox-server"
 const ClientDropDir = "/botbox-client"
 const ServerUser = "sandbox"
 const ClientUser = "sandbox"
-const NetworkSubnet string = "172.21.0.0/16"
-const ServerIP string = "172.21.0.2"
 const ServerImageName = "botbox-sandbox-server"
 const ClientImageName = "botbox-sandbox-client"
 const ClientServerEnvVar = "BOTBOX_SERVER"
@@ -87,28 +85,32 @@ func SetupSandbox(cli *client.Client, req *MatchRequest) (string, string, []stri
 		return "", "", nil, err
 	}
 
-	// Connect server to the network. Give it a static IP so we don't have to
-	// lookup what it will be for clients to connect.
+	// Connect server to the network.
 	log.Println("Connecting server.")
-	epSet := &network.EndpointSettings{
-		IPAMConfig: &network.EndpointIPAMConfig{
-			IPv4Address: ServerIP,
-		},
-	}
-	err = cli.NetworkConnect(context.Background(), netId, servId, epSet)
+	servEpSet := &network.EndpointSettings{}
+	clientEpSet := &network.EndpointSettings{}
+
+	err = cli.NetworkConnect(context.Background(), netId, servId, servEpSet)
 	if err != nil {
 		return "", "", nil, err
 	}
 
+	// Get the server IP address on the network
+	netInfo, err := cli.NetworkInspect(context.Background(), netId)
+	if err != nil {
+		return "", "", nil, err
+	}
+	servIp := netInfo.Containers[servId].IPv4Address
+
 	clients := []string{}
 	for _, c := range req.Clients {
 		log.Println("Setting up client.")
-		clientId, err := SetupServer(cli, c)
+		clientId, err := SetupClient(cli, c, servIp)
 		if err != nil {
 			return "", "", nil, err
 		}
 		log.Println("Connecting client.")
-		cli.NetworkConnect(context.Background(), netId, clientId, epSet)
+		cli.NetworkConnect(context.Background(), netId, clientId, clientEpSet)
 		clients = append(clients, clientId)
 	}
 
@@ -160,6 +162,8 @@ func DestroySandbox(cli *client.Client, network string, containers []string) err
 			return err
 		}
 	}
+
+	cli.NetworkRemove(context.Background(), network)
 	return nil
 }
 
@@ -167,14 +171,7 @@ func DestroySandbox(cli *client.Client, network string, containers []string) err
 func SetupNetwork(cli *client.Client) (string, error) {
 	t := time.Now().Unix()
 	name := "sandbox_" + strconv.FormatInt(t, 10)
-	createConfig := types.NetworkCreate{
-		Driver: "bridge",
-		IPAM: network.IPAM{
-			Config: []network.IPAMConfig{
-				network.IPAMConfig{Subnet: NetworkSubnet},
-			},
-		},
-	}
+	createConfig := types.NetworkCreate{Driver: "bridge"}
 	netResponse, err := cli.NetworkCreate(
 		context.Background(),
 		name,
@@ -233,7 +230,7 @@ func SetupServer(cli *client.Client, archive Archive) (string, error) {
 
 // Setup a client sandbox in an isolated container. Returns the ID of the
 // container if it was created successfully.
-func SetupClient(cli *client.Client, archive Archive) (string, error) {
+func SetupClient(cli *client.Client, archive Archive, serverIP string) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
@@ -241,7 +238,7 @@ func SetupClient(cli *client.Client, archive Archive) (string, error) {
 		WorkingDir: ClientDropDir,
 		User:       ClientUser,
 		Image:      ClientImageName,
-		Env:        []string{ClientServerEnvVar + "=" + ServerIP},
+		Env:        []string{ClientServerEnvVar + "=" + serverIP},
 	}
 	hostConfig := &container.HostConfig{}
 	netConfig := &network.NetworkingConfig{}
@@ -258,26 +255,18 @@ func SetupClient(cli *client.Client, archive Archive) (string, error) {
 		return "", err
 	}
 
-	files, err := archive.Files()
-	if err != nil {
-		return "", err
-	}
 	log.Println("Copying client files to container.")
-	for _, f := range files {
-		defer f.Close()
-		log.Println(ClientDropDir + "/" + f.Name)
-		err := cli.CopyToContainer(
-			context.Background(),
-			response.ID,
-			ClientDropDir,
-			f.ReadCloser,
-			types.CopyToContainerOptions{},
-		)
-
-		if err != nil {
-			return "", err
-		}
+	tar, err := ArchiveToTar(archive)
+	if err != nil {
+		return "", nil
 	}
+	err = cli.CopyToContainer(
+		context.Background(),
+		response.ID,
+		ClientDropDir,
+		tar,
+		types.CopyToContainerOptions{},
+	)
 
 	return response.ID, nil
 }
