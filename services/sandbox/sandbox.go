@@ -128,6 +128,7 @@ func StartSandbox(cli *client.Client, server string, clients []string) error {
 	if err != nil {
 		return err
 	}
+	time.Sleep(1000)
 	for _, c := range clients {
 		log.Println("Starting client")
 		err := cli.ContainerStart(context.Background(), c, startOpts)
@@ -135,36 +136,6 @@ func StartSandbox(cli *client.Client, server string, clients []string) error {
 			return err
 		}
 	}
-
-	// Attach to the container for debugging
-	attachOpts := types.ContainerAttachOptions{}
-	resp, err := cli.ContainerAttach(context.Background(), server, attachOpts)
-	if err != nil {
-		return err
-	}
-
-	// debugging
-	log.Println("Listening to server output")
-	test := make(chan int)
-	go func() {
-		cli.ContainerWait(context.Background(), server)
-		test <- 1
-	}()
-	go func() {
-		for {
-			o, err := resp.Reader.ReadBytes('\n')
-			log.Println(o)
-			if err != nil && err != io.EOF {
-				if err != io.EOF {
-					log.Println(err)
-				}
-				break
-			}
-			if <-test == 1 {
-				return
-			}
-		}
-	}()
 
 	return nil
 }
