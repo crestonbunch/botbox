@@ -1,7 +1,7 @@
 package main
 
 import (
-	"botbox/services/sandbox"
+	"github.com/crestonbunch/botbox/services/sandbox"
 	"github.com/docker/engine-api/client"
 	"log"
 	"net/http"
