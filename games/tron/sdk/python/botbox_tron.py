@@ -39,6 +39,7 @@ def start(turn_handler):
     # get the URL for the server from an environment variable if it is set,
     # otherwise use the default localhost
     if os.environ.get('BOTBOX_SERVER'):
+        print('Connecting to', os.environ['BOTBOX_SERVER'])
         url = (WS_SERVER_SCHEME + '://'
             + os.environ['BOTBOX_SERVER'] + ':' + WS_SERVER_PORT)
     else:

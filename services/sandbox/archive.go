@@ -9,10 +9,11 @@ import (
 )
 
 const (
-	MimeDetectLen = 512 // bytes
-	MimeTypeZip   = "application/zip"
-	MimeTypeGZip  = "application/x-gzip"
-	MimeTypeRar   = "application/x-rar-compressed"
+	MimeDetectLen      = 512 // bytes
+	MimeTypeZip        = "application/zip"
+	MimeTypeGZip       = "application/x-gzip"
+	MimeTypeRar        = "application/x-rar-compressed"
+	ArchivePermissions = 0555
 )
 
 // A generic archive interface that generalizes archive file formats: .zip,
@@ -42,6 +43,7 @@ func ArchiveToTar(a Archive) (io.Reader, error) {
 		tr.WriteHeader(&tar.Header{
 			Name: f.Name,
 			Size: int64(len(contents)),
+			Mode: ArchivePermissions,
 		})
 		tr.Write(contents)
 	}

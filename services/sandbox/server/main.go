@@ -7,6 +7,7 @@ import (
 	"net/http"
 )
 
+// TODO: load the docker client settings from ENV variables
 const DockerUserAgent = "botbox-game-1.0"
 const DockerSocketPath = "unix:///var/run/docker.sock"
 const DockerAPIVersion = "v1.23"
@@ -60,6 +61,15 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Log container logs
+	err = sandbox.LogSandbox(cli, serverId, clientIds)
+	if err != nil {
+		log.Println("Error logging sandbox.")
+		log.Println(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
 	err = sandbox.DestroySandbox(cli, netId, append(clientIds, serverId))
 	if err != nil {
 		log.Println("Error destroying sandbox.")
@@ -90,7 +100,7 @@ func main() {
 	}
 	log.Printf(string(r))
 
-	log.Println("Starting server")
+	log.Println("Waiting for connections")
 
 	http.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
 		matchStarter(cli, w, r)

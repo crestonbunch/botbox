@@ -8,6 +8,7 @@ import (
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
 	"github.com/docker/engine-api/types/network"
+	"github.com/docker/go-connections/nat"
 	"golang.org/x/net/context"
 	"io"
 	"io/ioutil"
@@ -70,6 +71,7 @@ func BuildImage(cli *client.Client, path, name string) ([]byte, error) {
 // Setup a sandboxed environment with docker containers for every script
 // and a network bridge between them. Returns the networkId, serverId,
 // a list of clientIds, or an error.
+// TODO: give each sandbox an ID so we can track logs separately
 func SetupSandbox(cli *client.Client, req *MatchRequest) (string, string, []string, error) {
 	// Setup network
 	log.Println("Setting up network.")
@@ -120,17 +122,49 @@ func SetupSandbox(cli *client.Client, req *MatchRequest) (string, string, []stri
 // Start the server and clients in a sandbox.
 func StartSandbox(cli *client.Client, server string, clients []string) error {
 
-	opts := types.ContainerStartOptions{}
-	err := cli.ContainerStart(context.Background(), server, opts)
+	log.Println("Starting server")
+	startOpts := types.ContainerStartOptions{}
+	err := cli.ContainerStart(context.Background(), server, startOpts)
 	if err != nil {
 		return err
 	}
 	for _, c := range clients {
-		err := cli.ContainerStart(context.Background(), c, opts)
+		log.Println("Starting client")
+		err := cli.ContainerStart(context.Background(), c, startOpts)
 		if err != nil {
 			return err
 		}
 	}
+
+	// Attach to the container for debugging
+	attachOpts := types.ContainerAttachOptions{}
+	resp, err := cli.ContainerAttach(context.Background(), server, attachOpts)
+	if err != nil {
+		return err
+	}
+
+	// debugging
+	log.Println("Listening to server output")
+	test := make(chan int)
+	go func() {
+		cli.ContainerWait(context.Background(), server)
+		test <- 1
+	}()
+	go func() {
+		for {
+			o, err := resp.Reader.ReadBytes('\n')
+			log.Println(o)
+			if err != nil && err != io.EOF {
+				if err != io.EOF {
+					log.Println(err)
+				}
+				break
+			}
+			if <-test == 1 {
+				return
+			}
+		}
+	}()
 
 	return nil
 }
@@ -143,6 +177,41 @@ func Wait(cli *client.Client, serverId string) error {
 		return err
 	}
 	log.Println("Container stopped.")
+	return nil
+}
+
+// Print docker logs for the sandbox containers.
+func LogSandbox(cli *client.Client, serverId string, clientIds []string) error {
+	log.Println("Printing server log")
+	opts := types.ContainerLogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+	}
+	rc, err := cli.ContainerLogs(context.Background(), serverId, opts)
+	if err != nil {
+		return err
+	}
+	defer rc.Close()
+	o, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return err
+	}
+	log.Println(string(o))
+
+	for _, c := range clientIds {
+		log.Println("Printing client log")
+		rc, err := cli.ContainerLogs(context.Background(), c, opts)
+		if err != nil {
+			return err
+		}
+		defer rc.Close()
+		o, err := ioutil.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+		log.Println(string(o))
+	}
+
 	return nil
 }
 
@@ -191,10 +260,11 @@ func SetupServer(cli *client.Client, archive Archive) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
-		Cmd:        []string{"/bin/bash", "run.sh"},
-		WorkingDir: ServerDropDir,
-		User:       ServerUser,
-		Image:      ServerImageName,
+		Cmd:          []string{"/bin/bash", "run.sh"},
+		WorkingDir:   ServerDropDir,
+		User:         ServerUser,
+		Image:        ServerImageName,
+		ExposedPorts: map[nat.Port]struct{}{nat.Port("12345/tcp"): struct{}{}},
 	}
 	// TODO: send score results to scoreboard service
 	hostConfig := &container.HostConfig{}

@@ -1,1 +1,1 @@
-python random_agent.py
+python3 random_agent.py

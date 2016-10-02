@@ -1,9 +1,9 @@
 package main
 
 import (
-	"botbox/common/server"
-	"botbox/games/tron"
 	"fmt"
+	"github.com/crestonbunch/botbox/common/server"
+	"github.com/crestonbunch/botbox/games/tron"
 	"net/http"
 	"os"
 )
