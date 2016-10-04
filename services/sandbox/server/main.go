@@ -10,7 +10,7 @@ import (
 // TODO: load the docker client settings from ENV variables
 const DockerUserAgent = "botbox-game-1.0"
 const DockerSocketPath = "unix:///var/run/docker.sock"
-const DockerAPIVersion = "v1.23"
+const DockerAPIVersion = "v1.24"
 const ServerDockerFile = "server-image/"
 const ClientDockerFile = "client-image/"
 
@@ -34,26 +34,53 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 	}
 	defer request.Close()
 
-	// setup the Sandbox
-	netId, serverId, clientIds, err := sandbox.SetupSandbox(cli, request)
+	// create the network
+	netId, err := sandbox.SetupNetwork(cli)
 	if err != nil {
-		log.Println("Error setting up sandbox.")
+		log.Println("Error setting up network.")
+		log.Println(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	// create the server
+	servId, err := sandbox.SetupServer(cli, request.Server)
+	if err != nil {
+		log.Println("Error setting up server.")
 		log.Println(err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
 	// start the server
-	err = sandbox.StartSandbox(cli, serverId, clientIds)
+	servIp, err := sandbox.StartServer(cli, netId, servId)
 	if err != nil {
-		log.Println("Error starting sandbox.")
+		log.Println("Error starting the server.")
+		log.Println(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	// create the clients
+	clientIds, err := sandbox.SetupClients(cli, netId, servIp, request.Clients)
+	if err != nil {
+		log.Println("Error creating clients.")
+		log.Println(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	// start the clients
+	err = sandbox.StartClients(cli, netId, clientIds)
+	if err != nil {
+		log.Println("Error starting clients.")
 		log.Println(err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
 	// Wait for the server to close, then destroy the sandbox
-	err = sandbox.Wait(cli, serverId)
+	err = sandbox.Wait(cli, servId)
 	if err != nil {
 		log.Println("Error waiting for sandbox to close.")
 		log.Println(err)
@@ -62,7 +89,7 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log container logs
-	err = sandbox.LogSandbox(cli, serverId, clientIds)
+	err = sandbox.LogSandbox(cli, servId, clientIds)
 	if err != nil {
 		log.Println("Error logging sandbox.")
 		log.Println(err)
@@ -70,7 +97,8 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = sandbox.DestroySandbox(cli, netId, append(clientIds, serverId))
+	// Destroy the sandbox
+	err = sandbox.DestroySandbox(cli, netId, append(clientIds, servId))
 	if err != nil {
 		log.Println("Error destroying sandbox.")
 		log.Println(err)

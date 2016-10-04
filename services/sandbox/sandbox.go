@@ -13,6 +13,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"strconv"
 	"time"
 )
@@ -68,78 +69,6 @@ func BuildImage(cli *client.Client, path, name string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Setup a sandboxed environment with docker containers for every script
-// and a network bridge between them. Returns the networkId, serverId,
-// a list of clientIds, or an error.
-// TODO: give each sandbox an ID so we can track logs separately
-func SetupSandbox(cli *client.Client, req *MatchRequest) (string, string, []string, error) {
-	// Setup network
-	log.Println("Setting up network.")
-	netId, err := SetupNetwork(cli)
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	// Setup server container
-	log.Println("Setting up server.")
-	servId, err := SetupServer(cli, req.Server)
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	// Connect server to the network.
-	log.Println("Connecting server.")
-	servEpSet := &network.EndpointSettings{}
-	clientEpSet := &network.EndpointSettings{}
-
-	err = cli.NetworkConnect(context.Background(), netId, servId, servEpSet)
-	if err != nil {
-		return "", "", nil, err
-	}
-
-	// Get the server IP address on the network
-	netInfo, err := cli.NetworkInspect(context.Background(), netId)
-	if err != nil {
-		return "", "", nil, err
-	}
-	servIp := netInfo.Containers[servId].IPv4Address
-
-	clients := []string{}
-	for _, c := range req.Clients {
-		log.Println("Setting up client.")
-		clientId, err := SetupClient(cli, c, servIp)
-		if err != nil {
-			return "", "", nil, err
-		}
-		log.Println("Connecting client.")
-		cli.NetworkConnect(context.Background(), netId, clientId, clientEpSet)
-		clients = append(clients, clientId)
-	}
-
-	return netId, servId, clients, nil
-}
-
-// Start the server and clients in a sandbox.
-func StartSandbox(cli *client.Client, server string, clients []string) error {
-
-	log.Println("Starting server")
-	startOpts := types.ContainerStartOptions{}
-	err := cli.ContainerStart(context.Background(), server, startOpts)
-	if err != nil {
-		return err
-	}
-	time.Sleep(1000)
-	for _, c := range clients {
-		log.Println("Starting client")
-		err := cli.ContainerStart(context.Background(), c, startOpts)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // Blocks until the server container stops.
 func Wait(cli *client.Client, serverId string) error {
 	log.Println("Waiting for container to stop.")
@@ -148,6 +77,7 @@ func Wait(cli *client.Client, serverId string) error {
 		return err
 	}
 	log.Println("Container stopped.")
+
 	return nil
 }
 
@@ -269,9 +199,43 @@ func SetupServer(cli *client.Client, archive Archive) (string, error) {
 	return response.ID, nil
 }
 
+// Start the server container and connect it to the network. Return the IP
+// assigned to the server on the network or an error.
+func StartServer(cli *client.Client, netId, servId string) (string, error) {
+	// Connect server to the network.
+	log.Println("Connecting server.")
+	servEpSet := &network.EndpointSettings{}
+
+	err := cli.NetworkConnect(context.Background(), netId, servId, servEpSet)
+	if err != nil {
+		return "", err
+	}
+
+	log.Println("Starting server")
+	startOpts := types.ContainerStartOptions{}
+	err = cli.ContainerStart(context.Background(), servId, startOpts)
+	if err != nil {
+		return "", err
+	}
+
+	// Get the server IP address on the network
+	netInfo, err := cli.NetworkInspect(context.Background(), netId)
+	if err != nil {
+		return "", err
+	}
+	servIp, _, err := net.ParseCIDR(netInfo.Containers[servId].IPv4Address)
+	if err != nil {
+		return "", err
+	}
+
+	log.Println("Server IP: " + servIp.String())
+
+	return servIp.String(), nil
+}
+
 // Setup a client sandbox in an isolated container. Returns the ID of the
 // container if it was created successfully.
-func SetupClient(cli *client.Client, archive Archive, serverIP string) (string, error) {
+func SetupClient(cli *client.Client, netId, serverIP string, archive Archive) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
@@ -310,4 +274,48 @@ func SetupClient(cli *client.Client, archive Archive, serverIP string) (string, 
 	)
 
 	return response.ID, nil
+}
+
+// Start a client container and connect it to the network.
+func StartClient(cli *client.Client, netId, clientId string) error {
+	// Connect server to the network.
+	log.Println("Connecting client.")
+	epSet := &network.EndpointSettings{}
+
+	err := cli.NetworkConnect(context.Background(), netId, clientId, epSet)
+	if err != nil {
+		return err
+	}
+
+	log.Println("Starting client")
+	startOpts := types.ContainerStartOptions{}
+	err = cli.ContainerStart(context.Background(), clientId, startOpts)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func SetupClients(cli *client.Client, netId, serverIp string, archives []Archive) ([]string, error) {
+	clientIds := []string{}
+	for _, a := range archives {
+		clientId, err := SetupClient(cli, netId, serverIp, a)
+		if err != nil {
+			return nil, err
+		}
+		clientIds = append(clientIds, clientId)
+	}
+
+	return clientIds, nil
+}
+
+func StartClients(cli *client.Client, netId string, clientIds []string) error {
+	for _, clientId := range clientIds {
+		err := StartClient(cli, netId, clientId)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
