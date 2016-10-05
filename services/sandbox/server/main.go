@@ -43,8 +43,17 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate client secrets so they can't connect more than once.
+	secrets, err := sandbox.GenerateSecrets(len(request.Clients))
+	if err != nil {
+		log.Println("Error generating secrets.")
+		log.Println(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
 	// create the server
-	servId, err := sandbox.SetupServer(cli, request.Server)
+	servId, err := sandbox.SetupServer(cli, secrets, request.Server)
 	if err != nil {
 		log.Println("Error setting up server.")
 		log.Println(err)
@@ -62,7 +71,7 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create the clients
-	clientIds, err := sandbox.SetupClients(cli, netId, servIp, request.Clients)
+	clientIds, err := sandbox.SetupClients(cli, netId, servIp, secrets, request.Clients)
 	if err != nil {
 		log.Println("Error creating clients.")
 		log.Println(err)

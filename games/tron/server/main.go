@@ -1,11 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"github.com/crestonbunch/botbox/common/server"
 	"github.com/crestonbunch/botbox/games/tron"
+	"github.com/crestonbunch/botbox/services/sandbox"
+	"log"
 	"net/http"
 	"os"
+	"strings"
 )
 
 // Setup the tron server to listen to clients.
@@ -13,13 +15,20 @@ import (
 // to expect, and authorization is required. If no client keys are provided,
 // then authorization is not necessary.
 func main() {
-	keys := os.Args[1:]
+
+	keys := []string{}
+	if env, exist := os.LookupEnv(sandbox.ServerSecretEnvVar); exist {
+		keys = strings.Split(env, sandbox.EnvListSep)
+	} else {
+		keys = os.Args[1:]
+	}
 
 	if len(keys) > 0 {
-		fmt.Println("Requiring keys:", keys)
+		log.Println("Requiring keys:", keys)
 		s := server.NewAuthenticatedSynchronizedGameServer(tron.NewTwoPlayerTron(32, 32), keys)
 		go s.Start("/")
 	} else {
+		log.Println("Not requiring keys")
 		s := server.NewSynchronizedGameServer(tron.NewTwoPlayerTron(32, 32), 2)
 		go s.Start("/")
 	}

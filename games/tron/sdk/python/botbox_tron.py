@@ -34,7 +34,12 @@ def start(turn_handler):
     if there are any, they are assumed to be client keys that are
     sent to the server for connecting."""
 
-    headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
+    if os.environ.get('BOTBOX_SECRET'):
+        print('Using env secret:', os.environ['BOTBOX_SECRET'])
+        headers = {'Authentication': os.environ['BOTBOX_SECRET']}
+    else:
+        print('Using cli secret:', sys.argv[1])
+        headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
 
     # get the URL for the server from an environment variable if it is set,
     # otherwise use the default localhost

@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
@@ -15,6 +17,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,6 +28,10 @@ const ClientUser = "sandbox"
 const ServerImageName = "botbox-sandbox-server"
 const ClientImageName = "botbox-sandbox-client"
 const ClientServerEnvVar = "BOTBOX_SERVER"
+const ClientSecretEnvVar = "BOTBOX_SECRET"
+const ServerSecretEnvVar = "BOTBOX_SECRETS"
+const SecretLength = 64
+const EnvListSep = ";"
 
 // Convert a directory into a tar file to pass to the Docker image build
 // Path should end with a trailing slash
@@ -49,6 +56,20 @@ func tarFile(path string) (io.Reader, error) {
 	}
 	tr.Close()
 	return bytes.NewReader(buf.Bytes()), nil
+}
+
+// Generate a list of n cryptographically secure secrets.
+func GenerateSecrets(n int) ([]string, error) {
+	output := make([]string, n)
+	for i := 0; i < n; i++ {
+		b := make([]byte, SecretLength)
+		_, err := rand.Read(b)
+		if err != nil {
+			return nil, err
+		}
+		output = append(output, base64.RawURLEncoding.EncodeToString(b))
+	}
+	return output, nil
 }
 
 // Build a docker image from a Dockerfile with the given name
@@ -157,7 +178,7 @@ func SetupNetwork(cli *client.Client) (string, error) {
 
 // Setup a server sandbox in an isolated container. Returns the ID of the
 // container if it was created successfully.
-func SetupServer(cli *client.Client, archive Archive) (string, error) {
+func SetupServer(cli *client.Client, secrets []string, archive Archive) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
@@ -166,6 +187,7 @@ func SetupServer(cli *client.Client, archive Archive) (string, error) {
 		User:         ServerUser,
 		Image:        ServerImageName,
 		ExposedPorts: map[nat.Port]struct{}{nat.Port("12345/tcp"): struct{}{}},
+		Env:          []string{ServerSecretEnvVar + "=" + strings.Join(secrets, EnvListSep)},
 	}
 	// TODO: send score results to scoreboard service
 	hostConfig := &container.HostConfig{}
@@ -235,7 +257,7 @@ func StartServer(cli *client.Client, netId, servId string) (string, error) {
 
 // Setup a client sandbox in an isolated container. Returns the ID of the
 // container if it was created successfully.
-func SetupClient(cli *client.Client, netId, serverIP string, archive Archive) (string, error) {
+func SetupClient(cli *client.Client, netId, serverIP, secret string, archive Archive) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
@@ -243,7 +265,10 @@ func SetupClient(cli *client.Client, netId, serverIP string, archive Archive) (s
 		WorkingDir: ClientDropDir,
 		User:       ClientUser,
 		Image:      ClientImageName,
-		Env:        []string{ClientServerEnvVar + "=" + serverIP},
+		Env: []string{
+			ClientServerEnvVar + "=" + serverIP,
+			ClientSecretEnvVar + "=" + secret,
+		},
 	}
 	hostConfig := &container.HostConfig{}
 	netConfig := &network.NetworkingConfig{}
@@ -297,10 +322,10 @@ func StartClient(cli *client.Client, netId, clientId string) error {
 	return nil
 }
 
-func SetupClients(cli *client.Client, netId, serverIp string, archives []Archive) ([]string, error) {
+func SetupClients(cli *client.Client, netId, serverIp string, secrets []string, archives []Archive) ([]string, error) {
 	clientIds := []string{}
-	for _, a := range archives {
-		clientId, err := SetupClient(cli, netId, serverIp, a)
+	for i, a := range archives {
+		clientId, err := SetupClient(cli, netId, serverIp, secrets[i], a)
 		if err != nil {
 			return nil, err
 		}
