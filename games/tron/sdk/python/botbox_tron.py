@@ -37,9 +37,11 @@ def start(turn_handler):
     if os.environ.get('BOTBOX_SECRET'):
         print('Using env secret:', os.environ['BOTBOX_SECRET'])
         headers = {'Authentication': os.environ['BOTBOX_SECRET']}
-    else:
+    elif len(sys.argv) > 1:
         print('Using cli secret:', sys.argv[1])
-        headers = {'Authentication': sys.argv[1]} if len(sys.argv) > 1 else []
+        headers = {'Authentication': sys.argv[1]}
+    else:
+        headers = []
 
     # get the URL for the server from an environment variable if it is set,
     # otherwise use the default localhost
