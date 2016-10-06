@@ -45,6 +45,7 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 
 	// Generate client secrets so they can't connect more than once.
 	secrets, err := sandbox.GenerateSecrets(len(request.Clients))
+	log.Println(secrets)
 	if err != nil {
 		log.Println("Error generating secrets.")
 		log.Println(err)

@@ -41,6 +41,7 @@ def start(turn_handler):
         print('Using cli secret:', sys.argv[1])
         headers = {'Authentication': sys.argv[1]}
     else:
+        print('Using no authentication')
         headers = []
 
     # get the URL for the server from an environment variable if it is set,

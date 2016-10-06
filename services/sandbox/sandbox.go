@@ -67,7 +67,7 @@ func GenerateSecrets(n int) ([]string, error) {
 		if err != nil {
 			return nil, err
 		}
-		output = append(output, base64.RawURLEncoding.EncodeToString(b))
+		output[i] = base64.RawURLEncoding.EncodeToString(b)
 	}
 	return output, nil
 }
