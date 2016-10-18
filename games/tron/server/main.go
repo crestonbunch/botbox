@@ -1,41 +1,30 @@
 package main
 
 import (
-	"github.com/crestonbunch/botbox/common/server"
+	"github.com/crestonbunch/botbox/common/game"
 	"github.com/crestonbunch/botbox/games/tron"
-	"github.com/crestonbunch/botbox/services/sandbox"
-	"log"
-	"net/http"
-	"os"
-	"strings"
 )
 
 // Setup the tron server to listen to clients.
-// If command line arguments are provided, they are assumed to be client keys
-// to expect, and authorization is required. If no client keys are provided,
-// then authorization is not necessary.
+// To start the server you must provide a list of ids and secrets. When
+// a client connects with a valid secret, it will be automatically assigned the
+// corresponding id. To give a list like this via the command line, call
+// go run main.go --ids "1 2" --secrets "s1 s2"
+// Otherwise, in a Docker sandbox you can set the environment variables
+// BOTBOX_IDS and BOTBOX_SECRETS as space-separated lists of ids and secrets.
+// The secrets are necessary to prevent malicious agents from trying to connect
+// as two separate agents. Each client that connects should be given a secret
+// but not told what any other secrets are.
 func main() {
 
-	keys := []string{}
-	if env, exist := os.LookupEnv(sandbox.ServerSecretEnvVar); exist {
-		keys = strings.Split(env, sandbox.EnvListSep)
-	} else {
-		keys = os.Args[1:]
-	}
-
-	if len(keys) > 0 {
-		log.Println("Requiring keys:", keys)
-		s := server.NewAuthenticatedSynchronizedGameServer(tron.NewTwoPlayerTron(32, 32), keys)
-		go s.Start("/")
-	} else {
-		log.Println("Not requiring keys")
-		s := server.NewSynchronizedGameServer(tron.NewTwoPlayerTron(32, 32), 2)
-		go s.Start("/")
-	}
-
-	err := http.ListenAndServe(":12345", nil)
-	if err != nil {
-		panic("ListenAndServe: " + err.Error())
-	}
+	game.RunAuthenticatedServer(
+		func(idList, secretList []string) (*game.GameServer, error) {
+			return game.NewSynchronizedGameServer(
+				tron.NewTwoPlayerTron(32, 32),
+				idList,
+				secretList,
+			)
+		},
+	)
 
 }

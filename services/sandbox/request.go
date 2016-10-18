@@ -9,9 +9,15 @@ import (
 const SetupMemUsage = 100000 // bytes
 
 // A request to start a match with readers to the directories for starting the
-// match.
+// match. A list of client unique Ids must be passed in the same order as a
+// list of zip files that contain the agent scripts for each id. Each request
+// must be a multipart-form encoded request.
 type MatchRequest struct {
-	Server  Archive
+	// Passed in the 'server' property
+	Server Archive
+	// Passed in the 'ids' property
+	Ids []string
+	// Passed in the 'clients' property
 	Clients []Archive
 }
 
@@ -60,6 +66,8 @@ func FromHttp(r *http.Request) (*MatchRequest, error) {
 		return nil, err
 	}
 
+	clientIds := m.Value["ids"]
+
 	clientArchives := []Archive{}
 	// open the client readers
 	for _, f := range clientFiles {
@@ -74,5 +82,5 @@ func FromHttp(r *http.Request) (*MatchRequest, error) {
 		clientArchives = append(clientArchives, archive)
 	}
 
-	return &MatchRequest{serverArchive, clientArchives}, nil
+	return &MatchRequest{serverArchive, clientIds, clientArchives}, nil
 }

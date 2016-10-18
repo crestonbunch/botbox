@@ -36,10 +36,10 @@ def start(turn_handler):
 
     if os.environ.get('BOTBOX_SECRET'):
         print('Using env secret:', os.environ['BOTBOX_SECRET'])
-        headers = {'Authentication': os.environ['BOTBOX_SECRET']}
+        headers = {'Authorization': os.environ['BOTBOX_SECRET']}
     elif len(sys.argv) > 1:
         print('Using cli secret:', sys.argv[1])
-        headers = {'Authentication': sys.argv[1]}
+        headers = {'Authorization': sys.argv[1]}
     else:
         print('Using no authentication')
         headers = []
@@ -47,11 +47,12 @@ def start(turn_handler):
     # get the URL for the server from an environment variable if it is set,
     # otherwise use the default localhost
     if os.environ.get('BOTBOX_SERVER'):
-        print('Connecting to', os.environ['BOTBOX_SERVER'])
         url = (WS_SERVER_SCHEME + '://'
             + os.environ['BOTBOX_SERVER'] + ':' + WS_SERVER_PORT)
     else:
         url = WS_SERVER_SCHEME + '://' + WS_SERVER_URL + ':' + WS_SERVER_PORT
+
+    print("Connecting to:", url)
 
     ws = websocket.WebSocketApp(
         url,
@@ -89,7 +90,7 @@ def _on_message(ws, msg, turn_handler):
             sys.stdout.write('\n')
 
         action = turn_handler(player, actions, state)
-        response = {"type":"do", "payload":action}
+        response = {"action":action}
 
         ws.send(json.dumps(response))
         print("Sent", json.dumps(response))

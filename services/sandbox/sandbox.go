@@ -29,9 +29,10 @@ const ServerImageName = "botbox-sandbox-server"
 const ClientImageName = "botbox-sandbox-client"
 const ClientServerEnvVar = "BOTBOX_SERVER"
 const ClientSecretEnvVar = "BOTBOX_SECRET"
+const ServerIdsEnvVar = "BOTBOX_IDS"
 const ServerSecretEnvVar = "BOTBOX_SECRETS"
 const SecretLength = 64
-const EnvListSep = ";"
+const EnvListSep = " "
 
 // Convert a directory into a tar file to pass to the Docker image build
 // Path should end with a trailing slash
@@ -162,7 +163,10 @@ func DestroySandbox(cli *client.Client, network string, containers []string) err
 func SetupNetwork(cli *client.Client) (string, error) {
 	t := time.Now().Unix()
 	name := "sandbox_" + strconv.FormatInt(t, 10)
-	createConfig := types.NetworkCreate{Driver: "bridge"}
+	createConfig := types.NetworkCreate{
+		Driver:   "bridge",
+		Internal: true,
+	}
 	netResponse, err := cli.NetworkCreate(
 		context.Background(),
 		name,
@@ -178,7 +182,11 @@ func SetupNetwork(cli *client.Client) (string, error) {
 
 // Setup a server sandbox in an isolated container. Returns the ID of the
 // container if it was created successfully.
-func SetupServer(cli *client.Client, secrets []string, archive Archive) (string, error) {
+func SetupServer(
+	cli *client.Client,
+	ids, secrets []string,
+	archive Archive,
+) (string, error) {
 
 	// create container, but don't start it
 	containerConfig := &container.Config{
@@ -187,7 +195,10 @@ func SetupServer(cli *client.Client, secrets []string, archive Archive) (string,
 		User:         ServerUser,
 		Image:        ServerImageName,
 		ExposedPorts: map[nat.Port]struct{}{nat.Port("12345/tcp"): struct{}{}},
-		Env:          []string{ServerSecretEnvVar + "=" + strings.Join(secrets, EnvListSep)},
+		Env: []string{
+			ServerIdsEnvVar + "=" + strings.Join(ids, EnvListSep),
+			ServerSecretEnvVar + "=" + strings.Join(secrets, EnvListSep),
+		},
 	}
 	// TODO: send score results to scoreboard service
 	hostConfig := &container.HostConfig{}
@@ -205,7 +216,7 @@ func SetupServer(cli *client.Client, secrets []string, archive Archive) (string,
 		return "", err
 	}
 
-	log.Println("Coping server files.")
+	log.Println("Copying server files.")
 	tar, err := ArchiveToTar(archive)
 	if err != nil {
 		return "", err
@@ -270,7 +281,9 @@ func SetupClient(cli *client.Client, netId, serverIP, secret string, archive Arc
 			ClientSecretEnvVar + "=" + secret,
 		},
 	}
-	hostConfig := &container.HostConfig{}
+	hostConfig := &container.HostConfig{
+		NetworkMode: container.NetworkMode(netId),
+	}
 	netConfig := &network.NetworkingConfig{}
 	log.Println("Creating client container.")
 	response, err := cli.ContainerCreate(
@@ -304,17 +317,10 @@ func SetupClient(cli *client.Client, netId, serverIP, secret string, archive Arc
 // Start a client container and connect it to the network.
 func StartClient(cli *client.Client, netId, clientId string) error {
 	// Connect server to the network.
-	log.Println("Connecting client.")
-	epSet := &network.EndpointSettings{}
-
-	err := cli.NetworkConnect(context.Background(), netId, clientId, epSet)
-	if err != nil {
-		return err
-	}
 
 	log.Println("Starting client")
 	startOpts := types.ContainerStartOptions{}
-	err = cli.ContainerStart(context.Background(), clientId, startOpts)
+	err := cli.ContainerStart(context.Background(), clientId, startOpts)
 	if err != nil {
 		return err
 	}

@@ -29,7 +29,7 @@ COPY run.sh /botbox-server/
 RUN chown -R sandbox:root /botbox-server && \
     chmod 555 /botbox-server/run.sh
 
-#USER sandbox
+USER sandbox
 WORKDIR /botbox-server/
 
 CMD /bin/bash run.sh

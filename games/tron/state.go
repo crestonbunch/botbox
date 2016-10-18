@@ -2,7 +2,10 @@
 // a 2-dimensional grid with arbitrary numbers of players.
 package tron
 
-import "strconv"
+import (
+	"github.com/crestonbunch/botbox/common/game"
+	"strconv"
+)
 
 const (
 	DirectionNorth = "north"
@@ -80,17 +83,7 @@ func (s *TronState) Actions(p int) interface{} {
 
 // Commit an action for a player. The direction will be sent as a generic
 // interface, and casted into the expected string
-func (s *TronState) Do(p int, dir interface{}) {
-
-	// validate type
-	switch dir.(type) {
-	case nil:
-		// player has not made a move, the punishment is death
-		s.Kill(p)
-		return
-	}
-
-	a := dir.(string)
+func (s *TronState) Do(p int, a string) {
 
 	// to the integer to string conversion for coordinates
 	x := strconv.Itoa(s.Players[p].X)
@@ -173,4 +166,29 @@ func (s *TronState) Validate(p int, a string) bool {
 func (s *TronState) Kill(p int) {
 	s.Players[p].X = -1
 	s.Players[p].Y = -1
+}
+
+// Collect the result of the game
+// TODO: Currently this assumes a 2-player game.
+func (s *TronState) Result() []int {
+	result := []int{}
+	for i, p := range s.Players {
+		if p.X == -1 && p.Y == -1 {
+			// check for ties
+			tie := false
+			for j, q := range s.Players {
+				if i != j && p.X == -1 && p.Y == -1 && q.X == -1 && q.Y == -1 {
+					tie = true
+				}
+			}
+			if tie {
+				result = append(result, game.ResultTie)
+			} else {
+				result = append(result, game.ResultLoss)
+			}
+		} else {
+			result = append(result, game.ResultWin)
+		}
+	}
+	return result
 }

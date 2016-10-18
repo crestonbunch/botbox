@@ -27,7 +27,10 @@ So, yeah... lots of work left.
 Usage
 =====
 
-Right now you can run ```go run main.go``` from games/tron/server.
+Right now from ```games/tron/server``` you can run
+
+ ```go run main.go --ids "1 2" --secrets "s1 s2"```
+
 This starts the Tron server and waits for clients.
 
 Install the Tron SDK from games/tron/sdk/python using ```python setup.py develop```

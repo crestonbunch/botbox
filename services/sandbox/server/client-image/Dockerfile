@@ -23,10 +23,10 @@ RUN mkdir /botbox-client
 # copy the default run script -- this can be overwritten by the user
 COPY run.sh /botbox-client/
 
-RUN chown -R sandbox:root /botbox-client && \
+RUN chown -R root:root /botbox-client && \
     chmod 555 /botbox-client/run.sh
 
-#USER sandbox
+USER sandbox
 WORKDIR /botbox-client/
 
 CMD /bin/bash run.sh
