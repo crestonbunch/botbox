@@ -283,6 +283,7 @@ func SetupClient(cli *client.Client, netId, serverIP, secret string, archive Arc
 	}
 	hostConfig := &container.HostConfig{
 		NetworkMode: container.NetworkMode(netId),
+		CapDrop:     []string{"all"},
 	}
 	netConfig := &network.NetworkingConfig{}
 	log.Println("Creating client container.")

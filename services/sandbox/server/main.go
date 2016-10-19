@@ -54,7 +54,8 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// create the server
-	servId, err := sandbox.SetupServer(cli, secrets, request.Server)
+	ids := request.Ids
+	servId, err := sandbox.SetupServer(cli, ids, secrets, request.Server)
 	if err != nil {
 		log.Println("Error setting up server.")
 		log.Println(err)
