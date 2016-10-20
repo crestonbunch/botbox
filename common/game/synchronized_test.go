@@ -83,8 +83,10 @@ func TestSynchronizedGameHandler(t *testing.T) {
 		time.Second,
 	)
 	recorder := &mockGameRecorder{}
+	exitChan := make(chan bool)
 
 	handler := GameHandler(
+		exitChan,
 		connMan,
 		clientMan,
 		stateMan,
@@ -138,9 +140,7 @@ func TestSynchronizedGameHandler(t *testing.T) {
 		}()
 	}
 
-	for !state.Finished() {
-		// wait for game to finish
-	}
+	<-exitChan
 
 	if !state.Finished() {
 		t.Error("Game did not finish!")
@@ -177,8 +177,10 @@ func TestSynchronizedBadAgentConnectionTimeout(t *testing.T) {
 		2*time.Millisecond,
 	)
 	recorder := &mockGameRecorder{}
+	exitChan := make(chan bool)
 
 	handler := GameHandler(
+		exitChan,
 		connMan,
 		clientMan,
 		stateMan,
@@ -205,6 +207,9 @@ func TestSynchronizedBadAgentConnectionTimeout(t *testing.T) {
 		defer conn.Close()
 		conns = append(conns, conn)
 	}
+
+	<-exitChan
+
 	duration := time.Since(start)
 
 	if len(connMan.Connections) != 2 {
@@ -235,8 +240,10 @@ func TestSynchronizedAttemptedCheater(t *testing.T) {
 		time.Second,
 	)
 	recorder := &mockGameRecorder{}
+	exitChan := make(chan bool)
 
 	handler := GameHandler(
+		exitChan,
 		connMan,
 		clientMan,
 		stateMan,
@@ -296,9 +303,7 @@ func TestSynchronizedAttemptedCheater(t *testing.T) {
 		}()
 	}
 
-	for !state.Finished() {
-		// wait for game to finish
-	}
+	<-exitChan
 
 	if !state.Finished() {
 		t.Error("Game did not finish!")
@@ -335,8 +340,10 @@ func TestSynchronizedUselessAgent(t *testing.T) {
 		time.Second,
 	)
 	recorder := &mockGameRecorder{}
+	exitChan := make(chan bool)
 
 	handler := GameHandler(
+		exitChan,
 		connMan,
 		clientMan,
 		stateMan,
@@ -381,9 +388,7 @@ func TestSynchronizedUselessAgent(t *testing.T) {
 		}()
 	}
 
-	for !state.Finished() {
-		// wait for game to finish
-	}
+	<-exitChan
 
 	if !state.Finished() {
 		t.Error("Game did not finish!")

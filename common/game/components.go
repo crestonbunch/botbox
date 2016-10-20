@@ -91,6 +91,7 @@ func GameHandler(
 	record GameRecorder,
 ) websocket.Handler {
 
+	abortChan := make(chan bool)
 	errChan := make(chan error)
 	connChan := make(chan *websocket.Conn)
 	stateChan := make(chan GameState)
@@ -115,6 +116,7 @@ func GameHandler(
 		if !clientMan.Ready() {
 			// The client manager timed out before all clients connected
 			log.Println("Client manager timeout. Exiting.")
+			abortChan <- true
 			return
 		}
 
@@ -142,6 +144,8 @@ func GameHandler(
 				default:
 					log.Println(err)
 				}
+			case <-abortChan:
+				return
 			case state := <-stateChan:
 				// a state change has occurred
 				record.LogState(state)
@@ -477,16 +481,6 @@ func (w *Watchdog) Watch() chan bool {
 		w.ch <- true
 	})
 	return w.ch
-}
-
-// Reset the watchdog timer to the initial value.
-func (w *Watchdog) Reset() {
-	if w.timer != nil {
-		if !w.timer.Stop() {
-			<-w.timer.C
-		}
-		w.timer.Reset(w.timeout)
-	}
 }
 
 // Stop the watchdog from sending an error when the timeout is reached.
