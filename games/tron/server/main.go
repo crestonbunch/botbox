@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/crestonbunch/botbox/common/game"
 	"github.com/crestonbunch/botbox/games/tron"
+	"golang.org/x/net/websocket"
 )
 
 // Setup the tron server to listen to clients.
@@ -17,14 +18,31 @@ import (
 // but not told what any other secrets are.
 func main() {
 
-	game.RunAuthenticatedServer(
-		func(idList, secretList []string) (*game.GameServer, error) {
-			return game.NewSynchronizedGameServer(
-				tron.NewTwoPlayerTron(32, 32),
-				idList,
-				secretList,
-			)
-		},
-	)
+	exitChan := make(chan bool)
 
+	go func() {
+		game.RunAuthenticatedServer(
+			func(idList, secretList []string) (websocket.Handler, error) {
+				writer, err := game.NewSimpleGameRecorder()
+				if err != nil {
+					return nil, err
+				}
+				stateMan := game.NewSynchronizedStateManager(
+					tron.NewTwoPlayerTron(32, 32), game.MoveTimeout,
+				)
+
+				return game.GameHandler(
+					exitChan,
+					game.NewSimpleConnectionManager(),
+					game.NewAuthenticatedClientManager(
+						stateMan.NewClient, idList, secretList, game.ConnTimeout,
+					),
+					stateMan,
+					writer,
+				), nil
+			},
+		)
+	}()
+
+	<-exitChan
 }

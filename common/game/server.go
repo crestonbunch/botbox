@@ -3,6 +3,7 @@ package game
 import (
 	"flag"
 	"github.com/crestonbunch/botbox/services/sandbox"
+	"golang.org/x/net/websocket"
 	"log"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ import (
 // Pass in a constructor function that will build the GameServer from a list
 // of client ids and secrets to expect.
 func RunAuthenticatedServer(
-	constructor func(ids, secrets []string) (*GameServer, error),
+	constructor func(ids, secrets []string) (websocket.Handler, error),
 ) {
 
 	idList := []string{}
@@ -56,11 +57,11 @@ func RunAuthenticatedServer(
 	log.Printf("Clients: %s\n", idList)
 	log.Printf("Secrets: %s\n", secretList)
 
-	s, err := constructor(idList, secretList)
+	handler, err := constructor(idList, secretList)
 	if err != nil {
 		panic(err)
 	}
-	go s.Start("/")
+	http.Handle("/", handler)
 
 	err = http.ListenAndServe(":12345", nil)
 	if err != nil {

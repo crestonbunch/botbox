@@ -5,8 +5,8 @@ import (
 	"errors"
 	"golang.org/x/net/websocket"
 	"log"
-	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -15,16 +15,8 @@ const ResultLogFile = "./result.log"
 const ConnectLogFile = "./connect.log"
 const DisconnectLogFile = "./disconnect.log"
 
-const ConnTimeout = 10 // sec
-const MoveTimeout = 10 // sec
-
-// A generic game server interface.
-type GameServer struct {
-	ConnectionManager
-	ClientManager
-	StateManager
-	*GameRecorder
-}
+const ConnTimeout = 10 * time.Second
+const MoveTimeout = 10 * time.Second
 
 type GameClient interface {
 	// Get a unique identifier for this client.
@@ -34,13 +26,35 @@ type GameClient interface {
 	// Return a watchdog for this client with a timeout on how long it can take
 	// to make a move. Keeps clients from blocking forever.
 	Watchdog() *Watchdog
+
+	// Send and receive channels for communicating with the client
+	Send() chan ServerMessage
+	Receive() chan ClientMessage
+	Error() chan ClientError
 }
 
-// This component handles registering, disconnecting, scoring players, etc.
+type ConnectionManager interface {
+	// Create a websocket handler that will send connections along the given
+	// channel. This channel can be given to a listener which will do something
+	// with the connections. E.g., a client manager. The last channel is
+	// the exit channel, which should terminate the handler when it recieves a
+	// value.
+	Handler(chan *websocket.Conn, chan error) websocket.Handler
+
+	// Close all of the active connections.
+	Close()
+}
+
+// This component handles authenticating and managing clients.
 type ClientManager interface {
-	// Register an agent to play from an http request, or return an error if there
-	// was a problem authenticating the connection.
-	Register(*websocket.Conn) (GameClient, error)
+	// Listen to a channel that receives websocket connections and authenticate
+	// connections. If they are valid, allow them to remain connected other wise
+	// close them immediately. Return a waitgroup that finished when all clients
+	// are connected or a timeout occurs.
+	Register(chan *websocket.Conn) *sync.WaitGroup
+	// Return whether or not the client manager has all of the expected clients
+	// connected.
+	Ready() bool
 	// Get a list of the connected clients.
 	Clients() []GameClient
 }
@@ -51,130 +65,146 @@ type StateManager interface {
 	// Given a list of game clients, spawn a goroutine and play the game by
 	// sending/receiving messages according to how the game should progress.
 	// Return a channel which will receive the game state every time it changes.
-	Play([]GameClient, chan GameState, chan error)
+	// Return a waitgroup that finished when the game is over or a timeout
+	// occurs.
+	Play([]GameClient, chan GameState, chan error) *sync.WaitGroup
 }
 
-type ConnectionManager interface {
-	// Wait for clients to connect to the given URI path.
-	// Provide a listener to register them with
-	// the authentication manager and client managers, etc.
-	// The listener should return a boolean whether the connection was accepted
-	// or not.
-	Wait(path string, listener func(conn *websocket.Conn) bool) error
-
-	// Close all of the active connections.
+type GameRecorder interface {
+	LogState(GameState) error
+	LogResult(GameState) error
+	LogConnection(GameClient) error
+	LogDisconnection(GameClient) error
 	Close() error
 }
 
-func NewGameServer(
+// Start the game components and return a websocket handler that can be used
+// to start or mock and HTTP server and receive requests. Must be given a
+// connection manager, client manager, state manager, and game recorder. The
+// first channel parameter will be passed a value when the game is over, that
+// can be used to stop the HTTP server.
+func GameHandler(
+	exitChan chan bool,
 	connMan ConnectionManager,
 	clientMan ClientManager,
 	stateMan StateManager,
-	recorder *GameRecorder,
-) *GameServer {
-	return &GameServer{
-		connMan,
-		clientMan,
-		stateMan,
-		recorder,
-	}
-}
+	record GameRecorder,
+) websocket.Handler {
 
-func (s *GameServer) Start(path string) {
-	defer s.Close()
-
-	log.Println("Started server at path: " + path)
-	listener := func(conn *websocket.Conn) bool {
-		log.Println("Client connection received.")
-
-		client, err := s.ClientManager.Register(conn)
-
-		if err != nil {
-			log.Println("Client rejected: " + err.Error())
-			return false
-		}
-
-		log.Println("Client connected: authentication success.")
-		s.GameRecorder.LogConnection(client)
-
-		return true
-	}
-
-	log.Println("Waiting for connections.")
-
-	err := s.ConnectionManager.Wait(path, listener)
-
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	log.Println("All clients connected.")
-
-	// Play the game
+	errChan := make(chan error)
+	connChan := make(chan *websocket.Conn)
 	stateChan := make(chan GameState)
-	errChan := make(chan error)
-	go s.StateManager.Play(s.ClientManager.Clients(), stateChan, errChan)
+	handler := connMan.Handler(connChan, errChan)
 
-	for {
-		select {
-		case err := <-errChan:
-			switch err.(type) {
-			case ClientError:
-				log.Println("Client committed a sin: " + err.Error())
-				s.GameRecorder.LogDisconnection(err.(ClientError).client)
-			default:
-				log.Println("Non-client related error occurred.")
-			}
-		case state := <-stateChan:
-			// a state change has occurred
-			s.GameRecorder.LogState(state)
+	go func() {
+		log.Println("Waiting for connections.")
+		// Bind the client manager to the connection channel so that each time a
+		// connection is made by the connection manager, the client manager will
+		// inspect it and accept / reject the client and close the connection if
+		// necessary
+		wgReg := clientMan.Register(connChan)
+		// wait until all clients are connected or a timeout occurs
+		wgReg.Wait()
 
-			if state.Finished() {
-				s.GameRecorder.LogResult(state)
-				log.Printf("Result: %s\n", state.Result())
-				log.Println("Game over.")
-				return
+		for _, c := range clientMan.Clients() {
+			// Log clients that successfully connected.
+			record.LogConnection(c)
+			Listen(c)
+		}
+
+		if !clientMan.Ready() {
+			// The client manager timed out before all clients connected
+			log.Println("Client manager timeout. Exiting.")
+			return
+		}
+
+		log.Println("All clients connected.")
+		// If all clients are connected, begin playing the game by sending the
+		// request to the state manager to play.
+		wgPlay := stateMan.Play(clientMan.Clients(), stateChan, errChan)
+		// wait until the game is over or a timeout occurs
+		wgPlay.Wait()
+	}()
+
+	go func() {
+		defer connMan.Close()
+		defer record.Close()
+		defer func() {
+			exitChan <- true
+		}()
+		for {
+			select {
+			case err := <-errChan:
+				switch err.(type) {
+				case ClientError:
+					log.Println("Client committed a sin: " + err.Error())
+					record.LogDisconnection(err.(ClientError).client)
+				default:
+					log.Println(err)
+				}
+			case state := <-stateChan:
+				// a state change has occurred
+				record.LogState(state)
+
+				if state.Finished() {
+					record.LogResult(state)
+					log.Printf("Result: %s\n", state.Result())
+					log.Println("Game over.")
+					return
+				}
 			}
 		}
-	}
+	}()
+
+	return handler
 }
 
-func (s *GameServer) Close() {
-	// close the game recorder
-	if err := s.GameRecorder.Close(); err != nil {
-		log.Println("Error closing game recorder: " + err.Error())
-	}
-	// close client connections
-	if err := s.ConnectionManager.Close(); err != nil {
-		log.Println("Error: " + err.Error())
-	}
+// Listen for messages send from and received by this client in separate
+// non-blocking goroutines.
+func Listen(c GameClient) {
+	go func() {
+		for {
+			broadcast := <-c.Send()
+			err := websocket.JSON.Send(c.Conn(), &broadcast)
+			if err != nil {
+				c.Error() <- ClientError{err, c}
+			}
+		}
+	}()
 
-	// This is the easiest way of killing the HTTP server
-	os.Exit(0)
+	go func() {
+		for {
+			var msg ClientMessage
+			err := websocket.JSON.Receive(c.Conn(), &msg)
+			if err != nil {
+				c.Error() <- ClientError{err, c}
+			}
+
+			c.Receive() <- msg
+		}
+	}()
 }
 
-// A simple connection manager connects clients and requires them to all
-// connect before moving forward. Sets a timeout so that clients must connect
-// within the time frame or an error is returned to the game manager.
+// A simple connection manager that forwards all connections along the
+// connection channel in its handler.
 type SimpleConnectionManager struct {
-	Connections    []*websocket.Conn
-	NumConnections int
+	Connections []*websocket.Conn
+	ExitChans   map[*websocket.Conn]chan bool
 }
 
-func NewSimpleConnectionManager(num int) *SimpleConnectionManager {
-	return &SimpleConnectionManager{make([]*websocket.Conn, 0, num), num}
+func NewSimpleConnectionManager() *SimpleConnectionManager {
+	return &SimpleConnectionManager{
+		[]*websocket.Conn{},
+		map[*websocket.Conn]chan bool{},
+	}
 }
 
-func (m *SimpleConnectionManager) Wait(
-	path string,
-	listener func(*websocket.Conn) bool,
-) error {
+func (m *SimpleConnectionManager) Handler(
+	connChan chan *websocket.Conn,
+	errChan chan error,
+) websocket.Handler {
 
-	errChan := make(chan error)
-
-	// handler to register connected clients
-	http.Handle(path, websocket.Handler(func(conn *websocket.Conn) {
+	return websocket.Handler(func(conn *websocket.Conn) {
 		defer func() {
 			err := conn.Close()
 			if err != nil {
@@ -182,50 +212,22 @@ func (m *SimpleConnectionManager) Wait(
 			}
 		}()
 
-		accept := listener(conn)
+		m.Connections = append(m.Connections, conn)
+		connChan <- conn
 
-		if accept {
-			m.Connections = append(m.Connections, conn)
-		} else {
-			// reject this client, it was not accepted by the listener
-			return
-		}
+		// keep the connection alive while the agents play the game
+		exitChan := make(chan bool)
+		m.ExitChans[conn] = exitChan
+		<-exitChan
 
-		log.Printf("Connections: %d\\%d\n", len(m.Connections), m.NumConnections)
-
-		for {
-			// keep the connection alive while the agents play the game
-		}
-	}))
-
-	watchdog := NewWatchdog(ConnTimeout)
-	watchdog.Start(errors.New("Connection timeout."), errChan)
-
-	// block until all clients have connected or TODO: add a timeout
-	for len(m.Connections) < m.NumConnections {
-		select {
-		case err := <-errChan:
-			// if there is an error, send it to the main go routine
-			return err
-		default:
-			// don't block
-			// TODO: measure a timeout
-		}
-	}
-
-	watchdog.Stop()
-
-	return nil
+		conn.Close()
+	})
 }
 
-func (m *SimpleConnectionManager) Close() error {
-	var result error = nil
+func (m *SimpleConnectionManager) Close() {
 	for _, c := range m.Connections {
-		if err := c.Close(); err != nil {
-			result = err
-		}
+		m.ExitChans[c] <- true
 	}
-	return result
 }
 
 // An authenticated client manager will require secret keys passed in for each
@@ -236,6 +238,7 @@ type AuthenticatedClientManager struct {
 	clients       []GameClient
 	clientIds     []string
 	clientSecrets []string
+	timeout       time.Duration
 }
 
 // Create a new simple client manager. Give it a constructor to create clients
@@ -244,26 +247,70 @@ func NewAuthenticatedClientManager(
 	constructor func(id string, conn *websocket.Conn) GameClient,
 	clientIds []string,
 	clientSecrets []string,
+	timeout time.Duration,
 ) *AuthenticatedClientManager {
 	return &AuthenticatedClientManager{
 		constructor,
 		make([]GameClient, 0, len(clientIds)),
 		clientIds,
 		clientSecrets,
+		timeout,
 	}
 }
 
-func (m *AuthenticatedClientManager) Register(conn *websocket.Conn) (GameClient, error) {
-	secret := conn.Request().Header.Get("Authorization")
+func (m *AuthenticatedClientManager) Register(
+	connChan chan *websocket.Conn,
+) *sync.WaitGroup {
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	watchdog := NewWatchdog(m.timeout)
+	watchChan := watchdog.Watch()
+
+	go func() {
+		for {
+			select {
+			case conn := <-connChan:
+				log.Println("Client received")
+
+				id, err := m.Validate(conn)
+				if err != nil {
+					// Client sent invalid authorization parameters
+					log.Println("Client rejected: " + err.Error())
+					conn.Close()
+				} else {
+					log.Println("Client accepted")
+					client := m.constructor(id, conn)
+					m.clients = append(m.clients, client)
+				}
+
+				if len(m.clients) == cap(m.clients) {
+					wg.Done()
+					return
+				}
+			case <-watchChan:
+				// Quit the goroutine if the watchdog times out.
+				wg.Done()
+				return
+			}
+		}
+	}()
+
+	return &wg
+}
+
+func (m *AuthenticatedClientManager) Validate(
+	conn *websocket.Conn,
+) (string, error) {
+	secret := conn.Request().Header.Get("Authorization")
 	if secret == "" {
 		// no key sent by client
-		return nil, errors.New("Secret is required.")
+		return "", errors.New("Secret is required.")
 	}
 
 	// check if secret is in the list
 	valid := false
-	var client GameClient = nil
 	for i, k := range m.clientSecrets {
 		if k == secret {
 			valid = true
@@ -272,90 +319,65 @@ func (m *AuthenticatedClientManager) Register(conn *websocket.Conn) (GameClient,
 			m.clientSecrets = append(m.clientSecrets[:i], m.clientSecrets[i+1:]...)
 			m.clientIds = append(m.clientIds[:i], m.clientIds[i+1:]...)
 
-			client = m.constructor(id, conn)
-			m.clients = append(m.clients, client)
-			break
+			return id, nil
 		}
 	}
 
 	if valid == false {
-		return nil, errors.New("Invalid secret.")
+		return "", errors.New("Invalid secret.")
 	}
 
-	return client, nil
+	return "", nil
 }
 
 func (m *AuthenticatedClientManager) Clients() []GameClient {
 	return m.clients
 }
 
-// A simple client manager tracks client connections, but does not care at
-// all about authentication. It may be bad to use this in production! It will
-// take client ids from the User-Agent HTTP header.
-type SimpleClientManager struct {
-	constructor func(id string, conn *websocket.Conn) GameClient
-	clients     []GameClient
-}
-
-func NewSimpleClientManager(
-	constructor func(id string, conn *websocket.Conn) GameClient,
-) *SimpleClientManager {
-	return &SimpleClientManager{constructor, []GameClient{}}
-}
-
-func (m *SimpleClientManager) Register(conn *websocket.Conn) (GameClient, error) {
-	id := conn.Request().Header.Get("User-Agent")
-
-	client := m.constructor(id, conn)
-	m.clients = append(m.clients, client)
-
-	return client, nil
-}
-
-func (m *SimpleClientManager) Clients() []GameClient {
-	return m.clients
+func (m *AuthenticatedClientManager) Ready() bool {
+	return len(m.clients) == cap(m.clients)
 }
 
 // The game recorder records the game state every time it changes and whether
 // a client connects as expected or disconnects unexpectedly. This allows
 // the sandbox service to adequately punish clients which are not well-behaved,
 // and send game results to the scoreboard service.
-type GameRecorder struct {
+type SimpleGameRecorder struct {
 	StateLog      *os.File
 	ResultLog     *os.File
 	ConnectLog    *os.File
 	DisconnectLog *os.File
 }
 
-func NewGameRecorder(
-	statePath,
-	resultPath,
-	connectPath,
-	disconnectPath string,
-) (*GameRecorder, error) {
+func NewSimpleGameRecorder() (*SimpleGameRecorder, error) {
 	flags := os.O_APPEND | os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	perm := os.FileMode(0600)
-	stateLog, err := os.OpenFile(statePath, flags, perm)
+	stateLog, err := os.OpenFile(StateLogFile, flags, perm)
 	if err != nil {
 		return nil, err
 	}
-	resultLog, err := os.OpenFile(resultPath, flags, perm)
+	resultLog, err := os.OpenFile(ResultLogFile, flags, perm)
 	if err != nil {
 		return nil, err
 	}
-	connectLog, err := os.OpenFile(connectPath, flags, perm)
+	connectLog, err := os.OpenFile(ConnectLogFile, flags, perm)
 	if err != nil {
 		return nil, err
 	}
-	disconnectLog, err := os.OpenFile(disconnectPath, flags, perm)
+	disconnectLog, err := os.OpenFile(DisconnectLogFile, flags, perm)
 	if err != nil {
 		return nil, err
 	}
 
-	return &GameRecorder{stateLog, resultLog, connectLog, disconnectLog}, nil
+	return &SimpleGameRecorder{
+		stateLog,
+		resultLog,
+		connectLog,
+		disconnectLog,
+	}, nil
 }
 
-func (r *GameRecorder) LogState(s GameState) error {
+func (r *SimpleGameRecorder) LogState(s GameState) error {
 	b, err := json.Marshal(s)
 	if err != nil {
 		return err
@@ -368,7 +390,7 @@ func (r *GameRecorder) LogState(s GameState) error {
 	return nil
 }
 
-func (r *GameRecorder) LogResult(s GameState) error {
+func (r *SimpleGameRecorder) LogResult(s GameState) error {
 	b, err := json.Marshal(s.Result())
 	if err != nil {
 		return err
@@ -381,7 +403,7 @@ func (r *GameRecorder) LogResult(s GameState) error {
 	return nil
 }
 
-func (r *GameRecorder) LogConnection(c GameClient) error {
+func (r *SimpleGameRecorder) LogConnection(c GameClient) error {
 	_, err := r.ConnectLog.WriteString(c.Id() + "\n")
 	if err != nil {
 		return err
@@ -390,7 +412,7 @@ func (r *GameRecorder) LogConnection(c GameClient) error {
 	return nil
 }
 
-func (r *GameRecorder) LogDisconnection(c GameClient) error {
+func (r *SimpleGameRecorder) LogDisconnection(c GameClient) error {
 	_, err := r.DisconnectLog.WriteString(c.Id() + "\n")
 	if err != nil {
 		return err
@@ -399,7 +421,7 @@ func (r *GameRecorder) LogDisconnection(c GameClient) error {
 	return nil
 }
 
-func (r *GameRecorder) Close() error {
+func (r *SimpleGameRecorder) Close() error {
 	if err := r.StateLog.Close(); err != nil {
 		return err
 	}
@@ -440,22 +462,21 @@ func (e ClientError) Error() string {
 // by the time the timeout is up.
 type Watchdog struct {
 	timeout time.Duration
+	ch      chan bool
 	timer   *time.Timer
 }
 
-func NewWatchdog(timeout int) *Watchdog {
-	return &Watchdog{timeout: time.Duration(timeout) * time.Second}
+func NewWatchdog(timeout time.Duration) *Watchdog {
+	return &Watchdog{timeout, make(chan bool), nil}
 }
 
-// Start the watchdog on a separate goroutine. Will send an err to the
-// given channel if it runs out of time before it is stopped or reset.
-func (w *Watchdog) Start(err error, errChan chan error) {
-	go func() {
-		w.timer = time.AfterFunc(w.timeout, func() {
-			log.Println("Watchdog timed out.")
-			errChan <- err
-		})
-	}()
+// Start the watchdog on a separate goroutine. Will call Done() on the given
+// waitgroup when it times out unless it is stopped before the timer is done.
+func (w *Watchdog) Watch() chan bool {
+	w.timer = time.AfterFunc(w.timeout, func() {
+		w.ch <- true
+	})
+	return w.ch
 }
 
 // Reset the watchdog timer to the initial value.
