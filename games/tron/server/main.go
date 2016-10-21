@@ -23,7 +23,7 @@ func main() {
 	go func() {
 		game.RunAuthenticatedServer(
 			func(idList, secretList []string) (websocket.Handler, error) {
-				writer, err := game.NewSimpleGameRecorder()
+				writer, err := game.NewSimpleGameRecorder("./")
 				if err != nil {
 					return nil, err
 				}

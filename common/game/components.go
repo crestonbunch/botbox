@@ -6,14 +6,15 @@ import (
 	"golang.org/x/net/websocket"
 	"log"
 	"os"
+	"path"
 	"sync"
 	"time"
 )
 
-const StateLogFile = "./state.log"
-const ResultLogFile = "./result.log"
-const ConnectLogFile = "./connect.log"
-const DisconnectLogFile = "./disconnect.log"
+const StateLogFile = "state.log"
+const ResultLogFile = "result.log"
+const ConnectLogFile = "connect.log"
+const DisconnectLogFile = "disconnect.log"
 
 const ConnTimeout = 10 * time.Second
 const MoveTimeout = 10 * time.Second
@@ -103,9 +104,9 @@ func GameHandler(
 		// connection is made by the connection manager, the client manager will
 		// inspect it and accept / reject the client and close the connection if
 		// necessary
-		wgReg := clientMan.Register(connChan)
+		wg := clientMan.Register(connChan)
 		// wait until all clients are connected or a timeout occurs
-		wgReg.Wait()
+		wg.Wait()
 
 		for _, c := range clientMan.Clients() {
 			// Log clients that successfully connected.
@@ -123,9 +124,9 @@ func GameHandler(
 		log.Println("All clients connected.")
 		// If all clients are connected, begin playing the game by sending the
 		// request to the state manager to play.
-		wgPlay := stateMan.Play(clientMan.Clients(), stateChan, errChan)
+		wg = stateMan.Play(clientMan.Clients(), stateChan, errChan)
 		// wait until the game is over or a timeout occurs
-		wgPlay.Wait()
+		wg.Wait()
 	}()
 
 	go func() {
@@ -353,22 +354,22 @@ type SimpleGameRecorder struct {
 	DisconnectLog *os.File
 }
 
-func NewSimpleGameRecorder() (*SimpleGameRecorder, error) {
-	flags := os.O_APPEND | os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-	perm := os.FileMode(0600)
-	stateLog, err := os.OpenFile(StateLogFile, flags, perm)
+func NewSimpleGameRecorder(dir string) (*SimpleGameRecorder, error) {
+	f := os.O_APPEND | os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+	p := os.FileMode(0600)
+	stateLog, err := os.OpenFile(path.Join(dir, StateLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	resultLog, err := os.OpenFile(ResultLogFile, flags, perm)
+	resultLog, err := os.OpenFile(path.Join(dir, ResultLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	connectLog, err := os.OpenFile(ConnectLogFile, flags, perm)
+	connectLog, err := os.OpenFile(path.Join(dir, ConnectLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	disconnectLog, err := os.OpenFile(DisconnectLogFile, flags, perm)
+	disconnectLog, err := os.OpenFile(path.Join(dir, DisconnectLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}

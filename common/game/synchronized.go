@@ -90,7 +90,11 @@ func (m *SynchronizedStateManager) Play(
 				// note that if an error is returned, then the action will be the empty
 				// string, so a state can kill a player if the empty string is received
 				// to punish bad players
-				c.Send() <- ServerMessage{i, m.state.Actions(i), m.state.View(i)}
+				select {
+				case c.Send() <- ServerMessage{i, m.state.Actions(i), m.state.View(i)}:
+				case <-watchCh:
+					errChan <- errors.New("Client send timeout")
+				}
 
 				select {
 				case msg := <-c.Receive():
@@ -98,7 +102,7 @@ func (m *SynchronizedStateManager) Play(
 				case err := <-c.Error():
 					errChan <- err
 				case <-watchCh:
-					errChan <- errors.New("Client timeout")
+					errChan <- errors.New("Client receive timeout")
 				}
 				c.Watchdog().Stop()
 				log.Println("Got action '" + actions[i] + "' from client " + c.Id())
