@@ -65,6 +65,20 @@ def start(turn_handler):
 
     ws.run_forever()
 
+def print_state(state):
+    for y in range(state['h']):
+        for x in range(state['w']):
+            x_str, y_str = str(x), str(y)
+            if x_str in state['cells'] and y_str in state['cells'][x_str]:
+                sys.stdout.write(str(state['cells'][x_str][y_str]))
+            elif state['players'][0]['x'] == x and state['players'][0]['y'] == y:
+                sys.stdout.write('A')
+            elif state['players'][1]['x'] == x and state['players'][1]['y'] == y:
+                sys.stdout.write('B')
+            else:
+                sys.stdout.write(' ')
+        sys.stdout.write('\n')
+
 def _on_message(ws, msg, turn_handler):
     """This is a private method that handles incoming messages from
     the websocket, passes the turn information to an agent's turn
@@ -76,24 +90,10 @@ def _on_message(ws, msg, turn_handler):
         actions = parsed['actions']
         state = parsed['state']
 
-        for y in range(state['h']):
-            for x in range(state['w']):
-                x_str, y_str = str(x), str(y)
-                if x_str in state['cells'] and y_str in state['cells'][x_str]:
-                    sys.stdout.write(str(state['cells'][x_str][y_str]))
-                elif state['players'][0]['x'] == x and state['players'][0]['y'] == y:
-                    sys.stdout.write('A')
-                elif state['players'][1]['x'] == x and state['players'][1]['y'] == y:
-                    sys.stdout.write('B')
-                else:
-                    sys.stdout.write(' ')
-            sys.stdout.write('\n')
-
         action = turn_handler(player, actions, state)
         response = {"action":action}
 
         ws.send(json.dumps(response))
-        print("Sent", json.dumps(response))
 
     _thread.start_new_thread(x, ())
 

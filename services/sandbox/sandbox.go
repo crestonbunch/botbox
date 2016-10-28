@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"github.com/docker/engine-api/client"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
@@ -23,6 +24,11 @@ import (
 
 const ServerDropDir = "/botbox-server"
 const ClientDropDir = "/botbox-client"
+const StateLogFile = "state.log"
+const ResultLogFile = "result.log"
+const ConnectLogFile = "connect.log"
+const DisconnectLogFile = "disconnect.log"
+
 const ServerUser = "sandbox"
 const ClientUser = "sandbox"
 const ServerImageName = "botbox-sandbox-server"
@@ -103,39 +109,144 @@ func Wait(cli *client.Client, serverId string) error {
 	return nil
 }
 
-// Print docker logs for the sandbox containers.
-func LogSandbox(cli *client.Client, serverId string, clientIds []string) error {
-	log.Println("Printing server log")
+// Get container STDIN/STDOUT results
+func ContainerLogs(cli *client.Client, id string) ([]byte, error) {
 	opts := types.ContainerLogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 	}
-	rc, err := cli.ContainerLogs(context.Background(), serverId, opts)
+	rc, err := cli.ContainerLogs(context.Background(), id, opts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer rc.Close()
 	o, err := ioutil.ReadAll(rc)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	log.Println(string(o))
+	return o, nil
+}
 
-	for _, c := range clientIds {
-		log.Println("Printing client log")
-		rc, err := cli.ContainerLogs(context.Background(), c, opts)
-		if err != nil {
-			return err
-		}
-		defer rc.Close()
-		o, err := ioutil.ReadAll(rc)
-		if err != nil {
-			return err
-		}
-		log.Println(string(o))
+// Get a file from a container and return its contents as a byte array.
+func getFile(
+	cli *client.Client, containerId string, path string,
+) ([]byte, error) {
+	rc, _, err := cli.CopyFromContainer(context.Background(), containerId, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	contents, err := ioutil.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+	b := bytes.NewReader(contents)
+	archive, err := OpenTar(b)
+	if err != nil {
+		return nil, err
+	}
+	files, err := archive.Files()
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	contents, err = ioutil.ReadAll(files[0].Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return contents, nil
+}
+
+// Get the list of clients who successfully connected from the connect.log
+// file inside the container.
+func ClientsConnected(cli *client.Client, serverId string) ([]string, error) {
+	path := ServerDropDir + "/" + ConnectLogFile
+	contents, err := getFile(cli, serverId, path)
+	if err != nil {
+		return nil, err
+	}
+
+	ids, err := bytes.Split(bytes.TrimSpace(contents), []byte("\n")), nil
+	if err != nil {
+		return nil, err
+	}
+	output := make([]string, len(ids))
+
+	for i, id := range ids {
+		output[i] = string(id)
+	}
+
+	return output, nil
+}
+
+// Get the list of clients who committed a sin from the disconnect.log
+// file inside the container.
+func BadClients(cli *client.Client, serverId string) ([]string, error) {
+	path := ServerDropDir + "/" + DisconnectLogFile
+	contents, err := getFile(cli, serverId, path)
+	if err != nil {
+		return nil, err
+	}
+
+	ids, err := bytes.Split(bytes.TrimSpace(contents), []byte("\n")), nil
+	if err != nil {
+		return nil, err
+	}
+
+	output := make([]string, 0)
+
+	for _, id := range ids {
+		if string(id) != "" {
+			output = append(output, string(id))
+		}
+	}
+
+	return output, nil
+}
+
+// Get the results for each client from the server.
+func GameResult(cli *client.Client, serverId string) ([]int, error) {
+	path := ServerDropDir + "/" + ResultLogFile
+	contents, err := getFile(cli, serverId, path)
+	if err != nil {
+		return nil, err
+	}
+
+	parsed := make([]float64, 0)
+	err = json.Unmarshal(contents, &parsed)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]int, len(parsed))
+	for i, v := range parsed {
+		result[i] = int(v)
+	}
+
+	return result, nil
+}
+
+// Get a list of state histories from the state.log file
+func GameHistory(cli *client.Client, serverId string) ([]interface{}, error) {
+	path := ServerDropDir + "/" + StateLogFile
+	contents, err := getFile(cli, serverId, path)
+	if err != nil {
+		return nil, err
+	}
+
+	states, err := bytes.Split(bytes.TrimSpace(contents), []byte("\n")), nil
+	if err != nil {
+		return nil, err
+	}
+	output := make([]interface{}, len(states))
+
+	for i, v := range states {
+		output[i] = json.Unmarshal(v, &output[i])
+	}
+
+	return output, nil
 }
 
 // Destroy a sandbox by passing it a list of container ids and the network id.

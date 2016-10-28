@@ -32,7 +32,6 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	defer request.Close()
 
 	// create the network
 	netId, err := sandbox.SetupNetwork(cli)
@@ -100,13 +99,14 @@ func matchStarter(cli *client.Client, w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log container logs
-	err = sandbox.LogSandbox(cli, servId, clientIds)
+	logs, err := sandbox.ContainerLogs(cli, servId)
 	if err != nil {
-		log.Println("Error logging sandbox.")
+		log.Println("Error logging server.")
 		log.Println(err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
+	log.Println(string(logs))
 
 	// Destroy the sandbox
 	err = sandbox.DestroySandbox(cli, netId, append(clientIds, servId))

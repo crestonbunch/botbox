@@ -21,14 +21,6 @@ type MatchRequest struct {
 	Clients []Archive
 }
 
-// Close open readers in the match request.
-func (m *MatchRequest) Close() {
-	m.Server.Close()
-	for _, c := range m.Clients {
-		c.Close()
-	}
-}
-
 // Build the request from an HTTP multipart/form POST request. The request must
 // contain a single server .zip file and a list of client .zip files.
 // Remember to Close() the MatchRequest when you're done with it!

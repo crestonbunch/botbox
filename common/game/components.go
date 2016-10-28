@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"github.com/crestonbunch/botbox/services/sandbox"
 	"golang.org/x/net/websocket"
 	"log"
 	"os"
@@ -10,11 +11,6 @@ import (
 	"sync"
 	"time"
 )
-
-const StateLogFile = "state.log"
-const ResultLogFile = "result.log"
-const ConnectLogFile = "connect.log"
-const DisconnectLogFile = "disconnect.log"
 
 const ConnTimeout = 10 * time.Second
 const MoveTimeout = 10 * time.Second
@@ -357,19 +353,19 @@ type SimpleGameRecorder struct {
 func NewSimpleGameRecorder(dir string) (*SimpleGameRecorder, error) {
 	f := os.O_APPEND | os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 	p := os.FileMode(0600)
-	stateLog, err := os.OpenFile(path.Join(dir, StateLogFile), f, p)
+	stateLog, err := os.OpenFile(path.Join(dir, sandbox.StateLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	resultLog, err := os.OpenFile(path.Join(dir, ResultLogFile), f, p)
+	resultLog, err := os.OpenFile(path.Join(dir, sandbox.ResultLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	connectLog, err := os.OpenFile(path.Join(dir, ConnectLogFile), f, p)
+	connectLog, err := os.OpenFile(path.Join(dir, sandbox.ConnectLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}
-	disconnectLog, err := os.OpenFile(path.Join(dir, DisconnectLogFile), f, p)
+	disconnectLog, err := os.OpenFile(path.Join(dir, sandbox.DisconnectLogFile), f, p)
 	if err != nil {
 		return nil, err
 	}

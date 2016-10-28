@@ -1,6 +1,7 @@
 package game
 
 import (
+	"github.com/crestonbunch/botbox/services/sandbox"
 	"golang.org/x/net/websocket"
 	"io/ioutil"
 	"math"
@@ -249,7 +250,7 @@ func TestSimpleGameRecorder(t *testing.T) {
 	testState = &mockState{[]int{1, 0}}
 	r.LogState(testState)
 
-	if f, err := os.Open(path.Join(dir, StateLogFile)); err != nil {
+	if f, err := os.Open(path.Join(dir, sandbox.StateLogFile)); err != nil {
 		t.Error(err)
 	} else {
 		defer f.Close()
@@ -265,7 +266,7 @@ func TestSimpleGameRecorder(t *testing.T) {
 	testState = &mockState{[]int{12, 4}}
 	r.LogResult(testState)
 
-	if f, err := os.Open(path.Join(dir, ResultLogFile)); err != nil {
+	if f, err := os.Open(path.Join(dir, sandbox.ResultLogFile)); err != nil {
 		t.Error(err)
 	} else {
 		defer f.Close()
@@ -283,7 +284,7 @@ func TestSimpleGameRecorder(t *testing.T) {
 	testClient = &SynchronizedGameClient{id: "456def"}
 	r.LogConnection(testClient)
 
-	if f, err := os.Open(path.Join(dir, ConnectLogFile)); err != nil {
+	if f, err := os.Open(path.Join(dir, sandbox.ConnectLogFile)); err != nil {
 		t.Error(err)
 	} else {
 		defer f.Close()
@@ -301,7 +302,7 @@ func TestSimpleGameRecorder(t *testing.T) {
 	testClient = &SynchronizedGameClient{id: "456def"}
 	r.LogDisconnection(testClient)
 
-	if f, err := os.Open(path.Join(dir, DisconnectLogFile)); err != nil {
+	if f, err := os.Open(path.Join(dir, sandbox.DisconnectLogFile)); err != nil {
 		t.Error(err)
 	} else {
 		defer f.Close()
