@@ -21,6 +21,11 @@ in each language, however this script can be overwritten by a custom one
 inside the source directory provided by the user. So in case the default
 run.sh does not meet your needs, you can provide a custom one.
 
-Networking
-==========
+Usage
+-----
 
+```$ cd server/```
+
+```$ ./build.sh && ./run.sh```
+
+This will start an HTTP server listening on port 8080.

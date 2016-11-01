@@ -17,12 +17,16 @@ Progress
 Currently the following is implemented and working:
 
 * Example Tron game and websocket server with a Python client SDK.
+* Sandbox service which spawns isolated Docker containers and plays games
+  started via an HTTP API.
+* Database container with empty PostgreSQL database
 
-We still need a script to sandbox games and a scheduler to schedule them and a
-storage service to store results and a web service to watch games and a user
-service to manage users and upload agents, etc.
+Remaining work:
 
-So, yeah... lots of work left.
+* Finish the web API
+* Build a web interface
+* Create a scheduler service for matchmaking
+* Continuous deployment and upgrade scripts
 
 Usage
 =====
@@ -60,3 +64,9 @@ def move(p, actions, state):
 botbox_tron.start(move)
 ```
 and run two instances of it to watch them play each other!
+
+Deploying
+=========
+
+Right now there is a simple ./deploy.sh script you can run to start up the
+docker containers.
