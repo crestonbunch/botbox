@@ -12,4 +12,5 @@ docker build -t botbox-api:$BOTBOX_VERSION \
     --build-arg smtp_host=$BOTBOX_SMTP_HOST \
     --build-arg smtp_port=$BOTBOX_SMTP_PORT \
     --build-arg domain=$BOTBOX_DOMAIN_NAME \
+    --build-arg recaptcha_secret=$BOTBOX_RECAPTCHA_SECRET \
     .

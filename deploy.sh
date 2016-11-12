@@ -7,36 +7,8 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 echo "Deploying Botbox version $BOTBOX_VERSION"
 
-# Step 1. Ask for information
-echo -n "Domain name (e.g. example.com): "
-read domain
-echo
-export BOTBOX_DOMAIN_NAME=$domain
-
-echo -n "SMTP host (e.g. smtp.gmail.com): "
-read smtp_host
-echo
-export BOTBOX_SMTP_HOST=$smtp_host
-
-echo -n "SMTP port (e.g. 587): "
-read smtp_port
-echo
-export BOTBOX_SMTP_PORT=$smtp_port
-
-echo -n "SMTP username: "
-read smtp_user
-echo
-export BOTBOX_SMTP_USERNAME=$smtp_user
-
-echo -n "SMTP password: "
-read -s smtp_pass
-echo
-export BOTBOX_SMTP_PASSWORD=$smtp_pass
-
-echo -n "Database password: "
-read -s password
-echo
-export BOTBOX_DB_PASSWORD=$password
+# Step 1. Load environment variables
+source env.sh
 
 # Step 2. Build the database
 echo "Setting up database service"
@@ -51,5 +23,21 @@ echo "Setting up API service"
 cd $DIR/services/api/server
 docker stop botbox-api
 docker rm botbox-api
+./build.sh
+./run.sh
+
+echo "Setting up web client"
+# Step 4. Start the web client service
+cd $DIR/services/web
+docker stop botbox-web
+docker rm botbox-web
+./build.sh
+./run.sh
+
+echo "Setting up reverse proxy"
+# Step 5. Start the nginx reverse proxy
+cd $DIR/services/nginx
+docker stop botbox-nginx
+docker rm botbox-nginx
 ./build.sh
 ./run.sh

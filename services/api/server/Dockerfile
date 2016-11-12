@@ -27,6 +27,9 @@ ENV SMTP_PORT=$smtp_port
 ARG domain
 ENV BOTBOX_DOMAIN_NAME=$domain
 
+ARG recaptcha_secret
+ENV RECAPTCHA_SECRET=$recaptcha_secret
+
 EXPOSE 8081
 COPY api /bin/
 CMD /bin/api

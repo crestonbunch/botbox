@@ -21,6 +21,8 @@ SMTP_HOST=???
 SMTP_PORT=25
 
 BOTBOX_DOMAIN_NAME=example.com
+
+BOTBOX_RECAPTCHA_SECRET=???
 ```
 
 ```$ cd server/```

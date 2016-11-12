@@ -3,3 +3,6 @@ __pycache__/
 build/
 dist/
 *.log
+env.sh
+settings.ts
+node_modules/

@@ -60,10 +60,13 @@ VALUES ('UNVERIFIED', 'USER_AUTH');
 CREATE TABLE users (
     "id"          serial PRIMARY KEY,
     "username"    text UNIQUE NOT NULL,
+    "fullname"    text NOT NULL DEFAULT '',
     "email"       text UNIQUE NOT NULL,
     "bio"         text NOT NULL DEFAULT '',
+    "organization" text NOT NULL DEFAULT '',
+    "location"    text NOT NULL DEFAULT '',
     "joined"      timestamptz NOT NULL DEFAULT now(),
-    "permissions" text REFERENCES permission_sets (id) NOT NULL DEFAULT 'UNVERIFIED'
+    "permission_set" text REFERENCES permission_sets (id) NOT NULL DEFAULT 'UNVERIFIED'
 );
 
 /* User passwords are stored in a separate table to avoid SELECT
@@ -83,11 +86,9 @@ CREATE TABLE passwords (
 CREATE TABLE user_sessions (
     "secret"      text PRIMARY KEY,
     "user"        integer REFERENCES users (id) ON DELETE CASCADE,
-    "user_agent"  text NOT NULL,
-    "ip"          text NOT NULL,
     "created"     timestamptz NOT NULL DEFAULT now(),
     "expires"     timestamptz NOT NULL DEFAULT now() + interval '30 minutes',
-    "revoked"     boolean DEFAULT FALSE
+    "revoked"     boolean NOT NULL DEFAULT FALSE
 );
 
 /* A table to manage verification secrets sent to new users via email.
@@ -117,9 +118,9 @@ CREATE TABLE password_recoveries (
  */
 CREATE TABLE leagues (
     "id"          serial PRIMARY KEY,
-    "name"        text,
-    "description" text,
-    "blob"        bytea
+    "name"        text NOT NULL,
+    "description" text NOT NULL,
+    "blob"        bytea NOT NULL
 );
 
 /* Seasons are time-delineated cycles of a league. Each season

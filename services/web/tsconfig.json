@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "outDir":        "./dist/",
+    "sourceMap":     true,
+    "noImplicitAny": true,
+    "module":        "commonjs",
+    "target":        "es5",
+    "jsx":           "react",
+     "experimentalDecorators": true
+  },
+
+  "files": [
+    "./typings/semantic-ui-react/semantic-ui-react.d.ts",
+    "./app/index.tsx"
+  ]
+}
+
