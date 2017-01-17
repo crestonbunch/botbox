@@ -1,154 +1,89 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/json"
 	"github.com/crestonbunch/botbox/services/api"
-	"github.com/gorilla/mux"
-	_ "github.com/lib/pq"
+	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"log"
-	"net/http"
 	"net/smtp"
-	"net/url"
 	"os"
 )
 
-const (
-	EnvVarPostgresUser     = "POSTGRES_DB_USER"
-	EnvVarPostgresDb       = "POSTGRES_DB_NAME"
-	EnvVarPostgresPassword = "POSTGRES_DB_PASSWORD"
-	EnvVarPostgresHost     = "POSTGRES_DB_HOST"
+type Config struct {
+	DomainName       string
+	PostgresUser     string
+	PostgresPassword string
+	PostgresDB       string
+	SMTPHost         string
+	SMTPPort         string
+	SMTPName         string
+	SMTPPassword     string
+	RecaptchaKey     string
+	RecaptchaSecret  string
+}
 
-	EnvVarSmtpIdentity = "SMTP_IDENTITY"
-	EnvVarSmtpUsername = "SMTP_USERNAME"
-	EnvVarSmtpPassword = "SMTP_PASSWORD"
-	EnvVarSmtpHost     = "SMTP_HOST"
-	EnvVarSmtpPort     = "SMTP_PORT"
+func ConfigFromEnv() *Config {
+	return &Config{
+		DomainName:       os.Getenv("BOTBOX_DOMAIN_NAME"),
+		PostgresUser:     os.Getenv("BOTBOX_DB_USER"),
+		PostgresPassword: os.Getenv("BOTBOX_DB_PASSWORD"),
+		PostgresDB:       os.Getenv("BOTBOX_DB_NAME"),
+		SMTPHost:         os.Getenv("BOTBOX_SMTP_HOST"),
+		SMTPPort:         os.Getenv("BOTBOX_SMTP_PORT"),
+		SMTPName:         os.Getenv("BOTBOX_SMTP_USERNAME"),
+		SMTPPassword:     os.Getenv("BOTBOX_SMTP_PASSWORD"),
+		RecaptchaKey:     os.Getenv("BOTBOX_RECAPTCHA_SITEKEY"),
+		RecaptchaSecret:  os.Getenv("BOTBOX_RECAPTCHA_SECRET"),
+	}
+}
 
-	EnvVarRecaptchaSecret = "RECAPTCHA_SECRET"
+type Templates struct {
+	EmailVerification []byte
+}
 
-	EnvVarDomainName = "BOTBOX_DOMAIN_NAME"
-)
+func TemplatesFromFiles() (*Templates, error) {
+	templates := &Templates{}
+
+	if f, err := os.OpenFile("emails/verify.html", os.O_RDONLY, os.ModePerm); err == nil {
+		if templates.EmailVerification, err = ioutil.ReadAll(f); err != nil {
+			return nil, err
+		}
+		f.Close()
+	} else {
+		return nil, err
+	}
+
+	return templates, nil
+}
 
 func main() {
+	config := ConfigFromEnv()
+	db := sqlx.MustConnect("postgres", "user="+config.PostgresUser+" dbname="+
+		config.PostgresDB+" password="+config.PostgresPassword)
 
-	dbUser := os.Getenv(EnvVarPostgresUser)
-	dbName := os.Getenv(EnvVarPostgresDb)
-	dbPass := os.Getenv(EnvVarPostgresPassword)
-	dbHost := os.Getenv(EnvVarPostgresHost)
-	connStr := "postgres://" + dbUser + ":" + dbPass + "@" + dbHost +
-		"/" + dbName + "?sslmode=disable"
+	recaptcha := &api.Recaptcha{
+		RecaptchaUrl:    api.RecaptchaUrl,
+		RecaptchaSecret: config.RecaptchaSecret,
+	}
 
-	db, err := sql.Open("postgres", connStr)
+	templates, err := TemplatesFromFiles()
+
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	userModel := api.NewUserModel(db)
-	emailSender := &emailSender{}
-	botChecker := &botChecker{}
-
-	accountEndpoints := api.NewAccountEndpoints(
-		userModel, emailSender, botChecker,
-	)
-	userEndpoints := api.NewUserEndpoints(userModel)
-
-	r := mux.NewRouter()
-	userEndpoints.Attach(r)
-	accountEndpoints.Attach(r)
-
-	log.Fatal(http.ListenAndServe(":8081", r))
-}
-
-type emailSender struct{}
-
-func (s *emailSender) SendVerificationEmail(email, secret string) error {
-	domain := os.Getenv(EnvVarDomainName)
-	smtpId := os.Getenv(EnvVarSmtpIdentity)
-	smtpUser := os.Getenv(EnvVarSmtpUsername)
-	smtpPass := os.Getenv(EnvVarSmtpPassword)
-	smtpHost := os.Getenv(EnvVarSmtpHost)
-	smtpPort := os.Getenv(EnvVarSmtpPort)
-	smtpAuth := smtp.PlainAuth(smtpId, smtpUser, smtpPass, smtpHost)
-	smtpAddr := smtpHost + ":" + smtpPort
-
-	verifyUrl := "http://" + domain + "/verify/" + secret
-
-	to := []string{email}
-	msg := []byte(
-		"To: " + email + "\r\n" +
-			"Subject: " + "Email verification \r\n" +
-			"\r\n" +
-			"Please use the following link to verify your account:\r\n" +
-			verifyUrl,
-	)
-	err := smtp.SendMail(smtpAddr, smtpAuth, "no-reply@"+domain, to, msg)
-
-	return err
-}
-
-func (s *emailSender) SendPasswordRecoveryEmail(email, secret string) error {
-	domain := os.Getenv(EnvVarDomainName)
-	smtpId := os.Getenv(EnvVarSmtpIdentity)
-	smtpUser := os.Getenv(EnvVarSmtpUsername)
-	smtpPass := os.Getenv(EnvVarSmtpPassword)
-	smtpHost := os.Getenv(EnvVarSmtpHost)
-	smtpPort := os.Getenv(EnvVarSmtpPort)
-	smtpAuth := smtp.PlainAuth(smtpId, smtpUser, smtpPass, smtpHost)
-	smtpAddr := smtpHost + ":" + smtpPort
-
-	recoverUrl := "http://" + domain + "/recover/" + secret
-
-	to := []string{email}
-	msg := []byte(
-		"To: " + email + "\r\n" +
-			"Subject: " + "Password recovery \r\n" +
-			"\r\n" +
-			"Please use the following link to recover your password:\r\n" +
-			recoverUrl + "\r\n" +
-			"\r\n If you did not make this request, then the link will expire" +
-			"in 7 days.",
-	)
-	err := smtp.SendMail(smtpAddr, smtpAuth, "no-reply@"+domain, to, msg)
-
-	return err
-}
-
-type botChecker struct{}
-
-func (c *botChecker) IsHuman(token string) (bool, error) {
-	vals := url.Values{}
-	vals.Set("secret", os.Getenv(EnvVarRecaptchaSecret))
-	vals.Set("response", token)
-
-	response, err := http.PostForm(
-		"https://www.google.com/recaptcha/api/siteverify",
-		vals,
-	)
-
-	if err != nil {
-		log.Println(err)
-		return false, err
+	emailer := &api.Emailer{
+		Auth: smtp.PlainAuth(
+			"", config.SMTPName, config.SMTPPassword, config.SMTPHost,
+		),
+		Server: config.SMTPHost + ":" + config.SMTPPort,
+		Domain: config.DomainName,
+		EmailVerificationTemplate: templates.EmailVerification,
 	}
 
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Println(err)
-		return false, err
-	}
+	app := api.NewApp(db, recaptcha, emailer)
 
-	msg := struct {
-		Success   bool   `json:'success'`
-		Timestamp string `json:'challenge_ts'`
-		Hostname  string `json:'hostname'`
-	}{}
-
-	err = json.Unmarshal(body, &msg)
-	if err != nil {
-		log.Println(err)
-		return false, err
-	}
-
-	return msg.Success, nil
+	app.Attach(api.NewUserPostEndpoint(app))
+	app.Attach(api.NewEmailVerifyPostEndpoint(app))
+	app.Attach(api.NewEmailVerifyPutEndpoint(app))
 }

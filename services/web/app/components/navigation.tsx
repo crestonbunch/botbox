@@ -2,7 +2,7 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import { Input, Menu } from "semantic-ui-react"
 
-import { Register } from "./register";
+import { Register } from "./register/register";
 import { Login } from "./login";
 
 export class Navigation extends React.Component<{}, {}> {

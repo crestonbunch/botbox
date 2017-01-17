@@ -58,19 +58,28 @@ VALUES ('UNVERIFIED', 'USER_AUTH');
 /* A table for tracking user information.
  */
 CREATE TABLE users (
-    "id"          serial PRIMARY KEY,
-    "username"    text UNIQUE NOT NULL,
-    "fullname"    text NOT NULL DEFAULT '',
-    "email"       text UNIQUE NOT NULL,
-    "bio"         text NOT NULL DEFAULT '',
-    "organization" text NOT NULL DEFAULT '',
-    "location"    text NOT NULL DEFAULT '',
-    "joined"      timestamptz NOT NULL DEFAULT now(),
-    "permission_set" text REFERENCES permission_sets (id) NOT NULL DEFAULT 'UNVERIFIED'
+    "id"              serial PRIMARY KEY,
+    "name"            text NOT NULL,
+    "email"           text UNIQUE NOT NULL,
+    "joined"          timestamptz NOT NULL DEFAULT now(),
+    "permission_set"  text REFERENCES permission_sets (id) NOT NULL DEFAULT 'UNVERIFIED'
+);
+
+/* Profile information that a user can optionally provide.
+ */
+CREATE TABLE user_profiles (
+    "id"            serial PRIMARY KEY,
+    "user"          integer UNIQUE REFERENCES users (id) ON DELETE CASCADE,
+    "bio"           text NOT NULL DEFAULT '',
+    "organization"  text NOT NULL DEFAULT '',
+    "location"      text NOT NULL DEFAULT '',
+    "website"       text NOT NULL DEFAULT '',
+    "github"        text NOT NULL DEFAULT ''
 );
 
 /* User passwords are stored in a separate table to avoid SELECT
  * queries on the users from accidentally pulling in password hashes.
+ * Also users who login with a third party will not have a password.
  */
 CREATE TABLE passwords (
     "id"      serial PRIMARY KEY,
@@ -81,9 +90,32 @@ CREATE TABLE passwords (
     "updated" timestamptz NOT NULL DEFAULT now()
 );
 
+/* Third party logins, e.g. GitHub are stored in this table and mapped to a
+ * single user in the user table.
+ */
+CREATE TABLE oauth_tokens (
+    "id"           serial PRIMARY KEY,
+    "user"         integer REFERENCES users (id) ON DELETE CASCADE,
+    "provider"     text NOT NULL,
+    "access_token" text NOT NULL UNIQUE,
+    "token_type"   text NOT NULL
+);
+
+/* Pending merges for accounts that require user confirmation. One a user
+ * confirms, the merge is copied to the oauth_tokens table.
+ */
+CREATE TABLE merge_secrets {
+    "secret"       text PRIMARY KEY,
+    "user"         integer REFERENCES users (id) ON DELETE CASCADE,
+    "provider"     text NOT NULL,
+    "access_token" text NOT NULL UNIQUE,
+    "token_type"   text NOT NULL,
+    "used"         boolean NOT NULL DEFAULT FALSE
+}
+
 /* A table to manage user sessions connected to the web client.
  */
-CREATE TABLE user_sessions (
+CREATE TABLE session_secrets (
     "secret"      text PRIMARY KEY,
     "user"        integer REFERENCES users (id) ON DELETE CASCADE,
     "created"     timestamptz NOT NULL DEFAULT now(),
@@ -93,7 +125,17 @@ CREATE TABLE user_sessions (
 
 /* A table to manage verification secrets sent to new users via email.
  */
-CREATE TABLE user_verifications (
+CREATE TABLE verify_secrets (
+    "secret"      text PRIMARY KEY,
+    "email"       text NOT NULL REFERENCES users (email) ON DELETE CASCADE,
+    "used"        boolean DEFAULT FALSE,
+    "created"     timestamptz NOT NULL DEFAULT now(),
+    "expires"     timestamptz NOT NULL DEFAULT now() + interval '30 days'
+);
+
+/* A table to manage email change secrets sent to new users via email.
+ */
+CREATE TABLE email_secrets (
     "secret"      text PRIMARY KEY,
     "email"       text NOT NULL,
     "user"        integer REFERENCES users (id) ON DELETE CASCADE,
@@ -102,10 +144,9 @@ CREATE TABLE user_verifications (
     "expires"     timestamptz NOT NULL DEFAULT now() + interval '30 days'
 );
 
-
 /* A table to manage password recovery requests. If a user makes a request with
  * the right secret, he/she will be able to recover the account password. */
-CREATE TABLE password_recoveries (
+CREATE TABLE recovery_secrets (
     "secret"    text PRIMARY KEY,
     "user"      integer REFERENCES users (id) ON DELETE CASCADE,
     "used"      boolean DEFAULT FALSE,
