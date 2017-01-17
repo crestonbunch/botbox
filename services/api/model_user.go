@@ -7,24 +7,34 @@ import (
 // A user contains all the relevant bits of information about a user contained
 // in the database.
 type User struct {
-	Id            int       `json:"-"`
-	Name          string    `json:"name"`
-	Email         string    `json:"email"`
-	Joined        time.Time `json:"joined"`
-	PermissionSet string    `json:"permission_set"`
+	Id            int       `json:"-" db:"id"`
+	Name          string    `json:"name" db:"name"`
+	Email         string    `json:"email" db:"email"`
+	Joined        time.Time `json:"joined" db:"joined"`
+	PermissionSet string    `json:"permission_set" db:"permission_set"`
 
 	Permissions *PermissionSet `json:"-"`
 	Profile     *Profile       `json:"profile"`
 }
 
-func (u *User) HasPermission(perm string) bool {
-	return u.Permissions.HasPermission(perm)
-}
-
 // A permission set is a set of permissions that a user has.
 type PermissionSet struct {
-	Name        string
+	Name        string `db:"name"`
 	Permissions []string
+}
+
+// A user's profile
+type Profile struct {
+	Id           int    `json:"-" `
+	Bio          string `json:"bio" db:"bio"`
+	Organization string `json:"organization" db:"organization"`
+	Location     string `json:"location" db:"location"`
+	Website      string `json:"website" db:"website"`
+	Github       string `json:"github" db:"github"`
+}
+
+func (u *User) HasPermission(perm string) bool {
+	return u.Permissions.HasPermission(perm)
 }
 
 func (p *PermissionSet) HasPermission(perm string) bool {
@@ -35,14 +45,4 @@ func (p *PermissionSet) HasPermission(perm string) bool {
 	}
 
 	return false
-}
-
-// A user's profile
-type Profile struct {
-	Id           int    `json:"-"`
-	Bio          string `json:"bio"`
-	Organization string `json:"organization"`
-	Location     string `json:"location"`
-	Website      string `json:"website"`
-	Github       string `json:"github"`
 }
