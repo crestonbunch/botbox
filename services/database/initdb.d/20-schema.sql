@@ -90,29 +90,6 @@ CREATE TABLE passwords (
     "updated" timestamptz NOT NULL DEFAULT now()
 );
 
-/* Third party logins, e.g. GitHub are stored in this table and mapped to a
- * single user in the user table.
- */
-CREATE TABLE oauth_tokens (
-    "id"           serial PRIMARY KEY,
-    "user"         integer REFERENCES users (id) ON DELETE CASCADE,
-    "provider"     text NOT NULL,
-    "access_token" text NOT NULL UNIQUE,
-    "token_type"   text NOT NULL
-);
-
-/* Pending merges for accounts that require user confirmation. One a user
- * confirms, the merge is copied to the oauth_tokens table.
- */
-CREATE TABLE merge_secrets {
-    "secret"       text PRIMARY KEY,
-    "user"         integer REFERENCES users (id) ON DELETE CASCADE,
-    "provider"     text NOT NULL,
-    "access_token" text NOT NULL UNIQUE,
-    "token_type"   text NOT NULL,
-    "used"         boolean NOT NULL DEFAULT FALSE
-}
-
 /* A table to manage user sessions connected to the web client.
  */
 CREATE TABLE session_secrets (

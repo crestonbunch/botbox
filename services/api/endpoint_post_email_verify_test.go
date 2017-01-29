@@ -2,11 +2,12 @@ package api
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 	"reflect"
 	"runtime"
 	"testing"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 func TestNewEmailVerifyPostEndpoint(t *testing.T) {
@@ -57,27 +58,28 @@ func TestEmailVerifyInsertValidate(t *testing.T) {
 		Email string
 		Name  string
 		Rows  sqlmock.Rows
+		Error error
 	}
 
 	testCases := map[sampleSetup]*HttpError{
 		// good email
 		sampleSetup{
 			"email@example.com", "John Doe",
-			sqlmock.NewRows([]string{"count", "name"}).
-				AddRow(1, "John Doe"),
+			sqlmock.NewRows([]string{"name"}).
+				AddRow("John Doe"),
+			nil,
 		}: nil,
 		// strange error
 		sampleSetup{
-			"email@example.com", "", sqlmock.NewRows([]string{"count", "name"}),
+			"email@example.com", "", nil, errors.New("dummy error"),
 		}: ErrUnknown,
 		// non-existant email
 		sampleSetup{
-			"email@example.com", "", sqlmock.NewRows([]string{"count", "name"}).
-				AddRow(0, ""),
+			"email@example.com", "", sqlmock.NewRows([]string{"name"}), nil,
 		}: ErrEmailNotFound,
 		// empty email
 		sampleSetup{
-			"", "", nil,
+			"", "", nil, nil,
 		}: ErrMissingEmail,
 	}
 
@@ -90,10 +92,16 @@ func TestEmailVerifyInsertValidate(t *testing.T) {
 
 		if setup.Rows != nil {
 			mock.ExpectQuery(
-				"SELECT COUNT\\(id\\) as count, name FROM users WHERE email = (.+)",
+				"SELECT name FROM users WHERE email = (.+)",
 			).
 				WithArgs(model.Email).
 				WillReturnRows(setup.Rows)
+		} else if setup.Error != nil {
+			mock.ExpectQuery(
+				"SELECT name FROM users WHERE email = (.+)",
+			).
+				WithArgs(model.Email).
+				WillReturnError(setup.Error)
 		}
 
 		m, err := p.ValidateEmail(model)

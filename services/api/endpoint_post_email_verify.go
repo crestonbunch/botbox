@@ -1,8 +1,10 @@
 package api
 
 import (
-	"github.com/jmoiron/sqlx"
+	"database/sql"
 	"log"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // @Title insertEmailVerification
@@ -58,26 +60,23 @@ func (e *EmailVerifyInsertProcessors) ValidateEmail(i interface{}) (interface{},
 		return nil, ErrMissingEmail
 	}
 
-	var result struct {
-		Count int    `db:"count"`
-		Name  string `db:"name"`
-	}
+	var name string
 	err := e.db.Get(
-		&result,
-		"SELECT COUNT(id) as count, name FROM users WHERE email = $1",
+		&name,
+		"SELECT name FROM users WHERE email = $1",
 		model.Email,
 	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrEmailNotFound
+	}
 
 	if err != nil {
 		log.Println(err)
 		return nil, ErrUnknown
 	}
 
-	if result.Count == 0 {
-		return nil, ErrEmailNotFound
-	}
-
-	e.name = result.Name
+	e.name = name
 
 	return model, nil
 }
