@@ -9,8 +9,11 @@
      "experimentalDecorators": true
   },
 
+  "exclude": [
+    "node_modules"
+  ],
+
   "files": [
-    "./typings/semantic-ui-react/semantic-ui-react.d.ts",
     "./app/index.tsx"
   ]
 }

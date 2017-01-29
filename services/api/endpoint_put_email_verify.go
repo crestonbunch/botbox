@@ -1,11 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"github.com/jmoiron/sqlx"
-	"io/ioutil"
 	"log"
-	"net/http"
 )
 
 // @Title Verify Email
@@ -20,12 +17,15 @@ import (
 func NewEmailVerifyPutEndpoint(a *App) *Endpoint {
 	p := &EmailVerifyUpdateProcessors{
 		db: a.db,
+		handler: &JsonHandler{
+			Target: func() interface{} { return &EmailVerifyPutModel{} },
+		},
 	}
 
 	return &Endpoint{
 		Path:    "/email/verify",
 		Methods: []string{"PUT"},
-		Handler: p.Handler,
+		Handler: p.handler.Handle,
 		Processors: []Processor{
 			p.ValidateSecret,
 			p.Begin,
@@ -38,29 +38,14 @@ func NewEmailVerifyPutEndpoint(a *App) *Endpoint {
 }
 
 type EmailVerifyUpdateProcessors struct {
-	db    *sqlx.DB
-	tx    *sqlx.Tx
-	email string
+	db      *sqlx.DB
+	tx      *sqlx.Tx
+	handler *JsonHandler
+	email   string
 }
 
 type EmailVerifyPutModel struct {
 	Secret string `json:"secret"`
-}
-
-func (e *EmailVerifyUpdateProcessors) Handler(r *http.Request) (interface{}, *HttpError) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println(err)
-		return nil, ErrUnknown
-	}
-
-	m := &EmailVerifyPutModel{}
-	err = json.Unmarshal(body, m)
-	if err != nil {
-		return nil, ErrInvalidJson
-	}
-
-	return m, nil
 }
 
 func (e *EmailVerifyUpdateProcessors) Begin(i interface{}) (interface{}, *HttpError) {

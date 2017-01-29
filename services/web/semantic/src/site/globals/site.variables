@@ -3,3 +3,9 @@
 *******************************/
 
 @smallFontSize: 0.75em;
+
+@relativeBorderRadius: @relative3px;
+@absoluteBorderRadius: @3px;
+@defaultBorderRadius: @absoluteBorderRadius;
+
+@pageBackground      : #FAFAFA;

@@ -1,5 +1,5 @@
 import * as React from "react";
-import "whatwg-fetch"
+import "whatwg-fetch";
 import { Input, Popup, Button, Form } from "semantic-ui-react";
 
 export interface LoginProps {
@@ -12,12 +12,10 @@ export class Login extends React.Component<LoginProps, {}> {
 
     const form = (<Form>
       <Form.Field>
-        <label>Username</label>
-        <Input icon='users' iconPosition='left' />
+        <Input icon='mail' iconPosition='left' placeholder="Email" />
       </Form.Field>
       <Form.Field>
-        <label>Password</label>
-        <Input type="password" icon='lock' iconPosition='left' />
+        <Input type="password" icon='lock' iconPosition='left' placeholder="Password" />
       </Form.Field>
       <Button primary>Login</Button>
     </Form>)

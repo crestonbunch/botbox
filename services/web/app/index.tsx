@@ -2,18 +2,21 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import "core-js/shim";
 
-import { Router, Route, Link, hashHistory } from 'react-router'
+import { Router, Route, Redirect, IndexRedirect, IndexRoute, browserHistory } from 'react-router'
 
-import { Home } from "./pages/home";
-import { GithubLogin } from "./pages/github";
+import { Page } from "./components/page";
+
+import { Home } from "./home";
+import { Register } from "./register";
 
 ReactDOM.render(
-(
-    <Router history={hashHistory}>
-      <Route path="/" component={Home} />
-      <Route path="/github" component={GithubLogin} />
+  (
+    <Router history={browserHistory}>
+      <Route path="/" component={Page}>
+        <IndexRoute component={Home} />
+        <Route path="register" component={Register} />
+      </Route>
     </Router>
-),
-    document.getElementById("app")
-
+  ),
+  document.getElementById("app")
 );

@@ -5,13 +5,15 @@ var ErrMissingEmail = &HttpError{"Missing email.", 400}
 var ErrMissingPassword = &HttpError{"Missing password.", 400}
 var ErrNameTooLong = &HttpError{"You name is too long.", 400}
 var ErrPasswordTooShort = &HttpError{"You password is too short.", 400}
+var ErrInvalidPassword = &HttpError{"The password you entered is incorrect.", 400}
 var ErrUnknown = &HttpError{"An unknown error occurred.", 500}
 var ErrEmailInUse = &HttpError{"That email is already in use!", 400}
-var ErrEmailNotFound = &HttpError{"That email does not exist.", 400}
+var ErrEmailNotFound = &HttpError{"That email does not exist.", 404}
+var ErrUserNotFound = &HttpError{"Specified user was not found.", 404}
 var ErrInvalidJson = &HttpError{"Invalid JSON.", 400}
 var ErrBotDetected = &HttpError{"You are a bot.", 400}
 var ErrInvalidSecret = &HttpError{"Invalid secret.", 400}
-var ErrUserNotFound = &HttpError{"Specified user was not found.", 400}
+var ErrLoginIncorrect = &HttpError{"Email or password was incorrect.", 400}
 
 // An HTTP error that can be returned to a user if something goes wrong.
 type HttpError struct {

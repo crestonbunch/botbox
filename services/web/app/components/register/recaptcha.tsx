@@ -41,7 +41,9 @@ export class Recaptcha extends React.Component<RecaptchaProps, RecaptchaState> {
 
   private checkReady() {
     if (grecaptcha != undefined) {
-      this.state.ready = true;
+      this.setState({
+        ready: true,
+      });
       this.renderRecaptcha();
       clearInterval(this.state.readyCheck);
     }

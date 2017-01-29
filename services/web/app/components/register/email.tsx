@@ -29,37 +29,24 @@ export class Email extends React.Component<EmailProps, EmailState> {
     this.setState({
       value: value,
       error: undefined
-    }, this.checkExists.bind(this));
+    }, this.isAvailable.bind(this));
   }
 
-  checkExists(): Promise<boolean> {
-
+  isAvailable(): Promise<boolean> {
     if (this.state.value.length > 0) {
-      return fetch('/api/account/exists/email/' + this.state.value).
+      return fetch('/api/email/' + this.state.value).
         then(function(response: Response) {
           if (response.status == 200) {
-            return response.text();
-          } else {
-            throw "Invalid email!"
+            this.setState({
+              error: "That email is already in use!"
+            });
+            return false;
           }
-      }.bind(this)).catch(function(err: any) {
-        return false;
-      }.bind(this)).then(function(result: string) {
-        if (result == "true") {
-          this.setState({
-            error: "That email is already in use!"
-          });
-
-          return false;
-        } else {
           return true;
-        }
-      }.bind(this)).catch(function(err: any) {
-        return false;
-      }.bind(this));
+        }.bind(this));
+    } else {
+      return new Promise<boolean>(function(r) {r(false);});
     }
-
-    return new Promise<boolean>(function(r) {r(true);});
   }
 
   validate(): Promise<boolean> {
@@ -75,7 +62,7 @@ export class Email extends React.Component<EmailProps, EmailState> {
       return new Promise<boolean>(function(r) {r(false);});
     }
 
-    return this.checkExists();
+    return this.isAvailable();
   }
 
   render() {

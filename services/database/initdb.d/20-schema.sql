@@ -119,7 +119,7 @@ CREATE TABLE session_secrets (
     "secret"      text PRIMARY KEY,
     "user"        integer REFERENCES users (id) ON DELETE CASCADE,
     "created"     timestamptz NOT NULL DEFAULT now(),
-    "expires"     timestamptz NOT NULL DEFAULT now() + interval '30 minutes',
+    "expires"     timestamptz NOT NULL DEFAULT now() + interval '30 days',
     "revoked"     boolean NOT NULL DEFAULT FALSE
 );
 

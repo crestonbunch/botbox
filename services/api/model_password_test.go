@@ -18,7 +18,7 @@ func TestHashPassword(t *testing.T) {
 	}{
 		{"t3stP455",
 			&Password{
-				0, 0, "bcrypt", "$2a$10$kB1KL3oXK0/nwbPr0lNfEejixlQNQoTkHzmt.zWlB4DNCSAvpP0pW", "SGVsbA",
+				0, "bcrypt", "$2a$10$kB1KL3oXK0/nwbPr0lNfEejixlQNQoTkHzmt.zWlB4DNCSAvpP0pW", "SGVsbA",
 			},
 			nil,
 		},

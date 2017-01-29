@@ -2,15 +2,12 @@ package api
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
-	"testing/iotest"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 func TestNewPasswordRecoverPostEndpoint(t *testing.T) {
@@ -46,61 +43,6 @@ func TestNewPasswordRecoverPostEndpoint(t *testing.T) {
 
 		if val != exp {
 			t.Error("Processors in unexpected order.")
-		}
-	}
-}
-
-func TestPasswordRecoverInsertHandler(t *testing.T) {
-
-	type sampleResponse struct {
-		Model *PasswordRecoverPostModel
-		Error error
-	}
-
-	testCases := map[*http.Request]sampleResponse{
-		// Good case
-		httptest.NewRequest(
-			"POST", "http://local/password/recover", strings.NewReader(`{
-			"email": "email@example.com"
-		}`)): sampleResponse{
-			Model: &PasswordRecoverPostModel{
-				Email: "email@example.com",
-			},
-			Error: nil,
-		},
-
-		// Invalid JSON
-		httptest.NewRequest(
-			"POST", "http://local/password/recover", strings.NewReader(`{
-			"email": "email@example.com",
-		}`)): sampleResponse{Model: nil, Error: ErrInvalidJson},
-
-		// Invalid reader
-		httptest.NewRequest(
-			"POST", "http://local/password/recover",
-			iotest.TimeoutReader(strings.NewReader(`{
-					"email": "email@example.com"
-				}`)),
-		): sampleResponse{Model: nil, Error: ErrUnknown},
-	}
-
-	for req, expected := range testCases {
-		p := &PasswordRecoverInsertProcessers{}
-		model, err := p.Handler(req)
-
-		if err != nil && expected.Error == nil {
-			t.Error(err)
-		} else if err == nil && expected.Error != nil {
-			t.Error("Post model returned a nil error!")
-		} else if expected.Error == nil && err == nil {
-			// Why does deep equal not correctly compare nil and nil?
-		} else if !reflect.DeepEqual(expected.Error, err) {
-			t.Error("Post model returned the wrong error!")
-		}
-
-		if expected.Model != nil &&
-			!reflect.DeepEqual(*expected.Model, *model.(*PasswordRecoverPostModel)) {
-			t.Error("Post model loaded the wrong data!")
 		}
 	}
 }
@@ -260,7 +202,7 @@ func TestPasswordRecoverInsert(t *testing.T) {
 		p := PasswordRecoverInsertProcessers{db: db, tx: tx, user: test.user}
 
 		q := mock.ExpectExec(
-			`INSERT INTO recovery_secrets \(secret, user\) VALUES (.+)`,
+			`INSERT INTO recovery_secrets \(secret, \"user\"\) VALUES (.+)`,
 		).
 			WithArgs(sqlmock.AnyArg(), test.user)
 

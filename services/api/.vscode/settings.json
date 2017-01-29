@@ -1,0 +1,5 @@
+{
+    "go.gopath": "/home/creston/.go",
+    "go.lintOnSave": true,
+    "go.formatOnSave": true
+}

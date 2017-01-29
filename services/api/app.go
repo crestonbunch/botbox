@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 	"net/http"
 )
 
@@ -32,6 +33,11 @@ func (a *App) Attach(e *Endpoint) {
 		ctx := context.WithValue(r.Context(), "app", a)
 		e.Handle(w, r.WithContext(ctx))
 	}).Methods(e.Methods...)
+}
+
+// Implements the http.Handler interface
+func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	a.router.ServeHTTP(w, r)
 }
 
 type Handler func(*http.Request) (interface{}, *HttpError)

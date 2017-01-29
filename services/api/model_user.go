@@ -9,9 +9,9 @@ import (
 type User struct {
 	Id            int       `json:"-" db:"id"`
 	Name          string    `json:"name" db:"name"`
-	Email         string    `json:"email" db:"email"`
+	Email         string    `json:"-" db:"email"`
 	Joined        time.Time `json:"joined" db:"joined"`
-	PermissionSet string    `json:"permission_set" db:"permission_set"`
+	PermissionSet string    `json:"-" db:"permission_set"`
 
 	Permissions *PermissionSet `json:"-"`
 	Profile     *Profile       `json:"profile"`

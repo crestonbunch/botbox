@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { Card, Icon } from "semantic-ui-react"
+import { Card, Icon, Button, Label } from "semantic-ui-react"
 import { Versus } from "./versus";
 
 export class MatchCard extends React.Component<{}, {}> {
@@ -10,9 +10,10 @@ export class MatchCard extends React.Component<{}, {}> {
         <Card.Content>
           <Versus />
         </Card.Content>
-        <Card.Content extra className="center aligned">
-          <Icon name="play" /> Watch
-        </Card.Content>
+        <Button attached="bottom">
+          <Icon name="eye" />
+          Watch
+        </Button>
       </Card>
     );
   }

@@ -1,11 +1,9 @@
 package api
 
 import (
-	"encoding/json"
-	"github.com/jmoiron/sqlx"
-	"io/ioutil"
 	"log"
-	"net/http"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // @Title Reset Password
@@ -21,12 +19,15 @@ import (
 func NewPasswordRecoverPutEndpoint(a *App) *Endpoint {
 	p := &PasswordRecoverUpdateProcessors{
 		db: a.db,
+		handler: &JsonHandler{
+			Target: func() interface{} { return &PasswordRecoverPutModel{} },
+		},
 	}
 
 	return &Endpoint{
 		Path:    "/password/recover",
 		Methods: []string{"PUT"},
-		Handler: p.Handler,
+		Handler: p.handler.Handle,
 		Processors: []Processor{
 			p.ValidateSecret,
 			p.ValidatePassword,
@@ -40,30 +41,15 @@ func NewPasswordRecoverPutEndpoint(a *App) *Endpoint {
 }
 
 type PasswordRecoverUpdateProcessors struct {
-	db   *sqlx.DB
-	tx   *sqlx.Tx
-	user int
+	db      *sqlx.DB
+	tx      *sqlx.Tx
+	handler *JsonHandler
+	user    int
 }
 
 type PasswordRecoverPutModel struct {
 	Secret   string `json:"secret"`
 	Password string `json:"password"`
-}
-
-func (e *PasswordRecoverUpdateProcessors) Handler(r *http.Request) (interface{}, *HttpError) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println(err)
-		return nil, ErrUnknown
-	}
-
-	m := &PasswordRecoverPutModel{}
-	err = json.Unmarshal(body, m)
-	if err != nil {
-		return nil, ErrInvalidJson
-	}
-
-	return m, nil
 }
 
 func (e *PasswordRecoverUpdateProcessors) Begin(i interface{}) (interface{}, *HttpError) {
@@ -106,13 +92,7 @@ func (e *PasswordRecoverUpdateProcessors) ValidateSecret(i interface{}) (interfa
 func (e *PasswordRecoverUpdateProcessors) ValidatePassword(i interface{}) (interface{}, *HttpError) {
 	model := i.(*PasswordRecoverPutModel)
 
-	if model.Password == "" {
-		return nil, ErrMissingPassword
-	}
-	if len(model.Password) < MinPasswordLen {
-		return nil, ErrPasswordTooShort
-	}
-	return model, nil
+	return model, ValidatePassword(model.Password)
 }
 
 func (e *PasswordRecoverUpdateProcessors) UpdateSecret(i interface{}) (interface{}, *HttpError) {
@@ -148,7 +128,7 @@ func (e *PasswordRecoverUpdateProcessors) UpdatePassword(i interface{}) (interfa
 
 	_, err = e.tx.Exec(
 		`UPDATE passwords SET hash = $1, salt = $2, method = $3, updated = NOW()
-		WHERE user = $4`,
+		WHERE "user" = $4`,
 		password.Hash, password.Salt, password.Method, e.user,
 	)
 

@@ -4,13 +4,9 @@ import (
 	"errors"
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/DATA-DOG/go-sqlmock.v1"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
-	"testing/iotest"
 )
 
 func TestNewEmailVerifyPutEndpoint(t *testing.T) {
@@ -46,61 +42,6 @@ func TestNewEmailVerifyPutEndpoint(t *testing.T) {
 
 		if val != exp {
 			t.Error("Processors in unexpected order.")
-		}
-	}
-}
-
-func TestVerifyEmailUpdateHandler(t *testing.T) {
-
-	type sampleResponse struct {
-		Model *EmailVerifyPutModel
-		Error error
-	}
-
-	testCases := map[*http.Request]sampleResponse{
-		// Good case
-		httptest.NewRequest(
-			"PUT", "http://local/email/verify", strings.NewReader(`{
-			"secret": "abcdef123456"
-		}`)): sampleResponse{
-			Model: &EmailVerifyPutModel{
-				Secret: "abcdef123456",
-			},
-			Error: nil,
-		},
-
-		// Invalid JSON
-		httptest.NewRequest(
-			"PUT", "http://local/email/verify", strings.NewReader(`{
-			"secret": "abcdef123456",
-		}`)): sampleResponse{Model: nil, Error: ErrInvalidJson},
-
-		// Invalid reader
-		httptest.NewRequest(
-			"PUT", "http://local/email/verify",
-			iotest.TimeoutReader(strings.NewReader(`{
-				"secret": "abcdef123456"
-			}`)),
-		): sampleResponse{Model: nil, Error: ErrUnknown},
-	}
-
-	for req, expected := range testCases {
-		p := &EmailVerifyUpdateProcessors{}
-		model, err := p.Handler(req)
-
-		if err != nil && expected.Error == nil {
-			t.Error(err)
-		} else if err == nil && expected.Error != nil {
-			t.Error("Put model returned a nil error!")
-		} else if expected.Error == nil && err == nil {
-			// Why does deep equal not correctly compare nil and nil?
-		} else if !reflect.DeepEqual(expected.Error, err) {
-			t.Error("Put model returned the wrong error!")
-		}
-
-		if expected.Model != nil &&
-			!reflect.DeepEqual(*expected.Model, *model.(*EmailVerifyPutModel)) {
-			t.Error("Put model loaded the wrong data!")
 		}
 	}
 }

@@ -1,8 +1,7 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
-import { Input, Menu } from "semantic-ui-react"
+import { Input, Button, Menu, Container } from "semantic-ui-react"
 
-import { Register } from "./register/register";
 import { Login } from "./login";
 
 export class Navigation extends React.Component<{}, {}> {
@@ -10,15 +9,19 @@ export class Navigation extends React.Component<{}, {}> {
   render() {
 
     return (
-      <Menu secondary>
-        <Menu.Item name='home' />
-        <Menu.Item name='leagues' />
-        <Menu.Item name='leaderboard' />
+      <Menu borderless inverted stackable compact fluid>
+        <Container>
+          <Menu.Item fitted="vertically">
+            <img src="assets/botbox-logo-inverted-full.svg" style={{height:"70%"}} />
+          </Menu.Item>
+          <Menu.Item name='play'>Play</Menu.Item>
+          <Menu.Item name='watch'>Watch</Menu.Item>
+          <Menu.Item name='learn'>Learn</Menu.Item>
 
-        <Menu.Menu position="right">
-          <Login trigger={<Menu.Item name='Login' />}/>
-          <Register trigger={<Menu.Item name='Register' />}/>
-        </Menu.Menu>
+          <Menu.Menu position="right">
+            <Login trigger={<Menu.Item name='login'>Login</Menu.Item>}/>
+          </Menu.Menu>
+        </Container>
       </Menu>
     );
   }

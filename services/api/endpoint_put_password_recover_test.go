@@ -2,15 +2,12 @@ package api
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
-	"testing/iotest"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 func TestNewPasswordRecoverPutEndpoint(t *testing.T) {
@@ -47,65 +44,6 @@ func TestNewPasswordRecoverPutEndpoint(t *testing.T) {
 
 		if val != exp {
 			t.Error("Processors in unexpected order.")
-		}
-	}
-}
-
-func TestPasswordRecoverUpdateHandler(t *testing.T) {
-
-	type sampleResponse struct {
-		Model *PasswordRecoverPutModel
-		Error error
-	}
-
-	testCases := map[*http.Request]sampleResponse{
-		// Good case
-		httptest.NewRequest(
-			"PUT", "http://local/password/recover", strings.NewReader(`{
-			"secret": "abcdef123456",
-			"password": "p455w0rd"
-		}`)): sampleResponse{
-			Model: &PasswordRecoverPutModel{
-				Secret:   "abcdef123456",
-				Password: "p455w0rd",
-			},
-			Error: nil,
-		},
-
-		// Invalid JSON
-		httptest.NewRequest(
-			"PUT", "http://local/password/recover", strings.NewReader(`{
-			"secret": "abcdef123456",
-			"password": "p455w0rd",
-		}`)): sampleResponse{Model: nil, Error: ErrInvalidJson},
-
-		// Invalid reader
-		httptest.NewRequest(
-			"PUT", "http://local/password/recover",
-			iotest.TimeoutReader(strings.NewReader(`{
-				"secret": "abcdef123456",
-				"password": "p455w0rd"
-			}`)),
-		): sampleResponse{Model: nil, Error: ErrUnknown},
-	}
-
-	for req, expected := range testCases {
-		p := &PasswordRecoverUpdateProcessors{}
-		model, err := p.Handler(req)
-
-		if err != nil && expected.Error == nil {
-			t.Error(err)
-		} else if err == nil && expected.Error != nil {
-			t.Error("Put model returned a nil error!")
-		} else if expected.Error == nil && err == nil {
-			// Why does deep equal not correctly compare nil and nil?
-		} else if !reflect.DeepEqual(expected.Error, err) {
-			t.Error("Put model returned the wrong error!")
-		}
-
-		if expected.Model != nil &&
-			!reflect.DeepEqual(*expected.Model, *model.(*PasswordRecoverPutModel)) {
-			t.Error("Put model loaded the wrong data!")
 		}
 	}
 }
@@ -353,7 +291,7 @@ func TestPasswordRecoverUpdatePassword(t *testing.T) {
 
 		q := mock.ExpectExec(
 			`UPDATE passwords SET hash = (.+), salt = (.+), method = (.+), `+
-				`updated = NOW\(\) WHERE user = (.+)`,
+				`updated = NOW\(\) WHERE \"user\" = (.+)`,
 		).
 			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "bcrypt", test.user)
 

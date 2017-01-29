@@ -1,16 +1,13 @@
 package api
 
 import (
-	"encoding/json"
-	"github.com/jmoiron/sqlx"
-	"io/ioutil"
 	"log"
-	"net/http"
+
+	"github.com/jmoiron/sqlx"
 )
 
 const (
-	MinPasswordLen = 6
-	MaxNameLen     = 20
+	MaxNameLen = 20
 )
 
 // @Title insertUserWithPassword
@@ -29,12 +26,15 @@ func NewUserPostEndpoint(a *App) *Endpoint {
 	p := &UserInsertProcessors{
 		db:        a.db,
 		recaptcha: a.recaptcha,
+		handler: &JsonHandler{
+			Target: func() interface{} { return &UserPasswordPostModel{} },
+		},
 	}
 
 	return &Endpoint{
 		Path:    "/user",
 		Methods: []string{"POST"},
-		Handler: p.Handler,
+		Handler: p.handler.Handle,
 		Processors: []Processor{
 			p.ValidateName,
 			p.ValidateEmail,
@@ -59,24 +59,9 @@ type UserPasswordPostModel struct {
 type UserInsertProcessors struct {
 	db        *sqlx.DB
 	tx        *sqlx.Tx
+	handler   *JsonHandler
 	userId    int
 	recaptcha RecaptchaModel
-}
-
-func (e *UserInsertProcessors) Handler(r *http.Request) (interface{}, *HttpError) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println(err)
-		return nil, ErrUnknown
-	}
-
-	m := &UserPasswordPostModel{}
-	err = json.Unmarshal(body, m)
-	if err != nil {
-		return nil, ErrInvalidJson
-	}
-
-	return m, nil
 }
 
 func (e *UserInsertProcessors) ValidateName(i interface{}) (interface{}, *HttpError) {
@@ -120,13 +105,7 @@ func (e *UserInsertProcessors) ValidateEmail(i interface{}) (interface{}, *HttpE
 func (e *UserInsertProcessors) ValidatePassword(i interface{}) (interface{}, *HttpError) {
 	model := i.(*UserPasswordPostModel)
 
-	if model.Password == "" {
-		return nil, ErrMissingPassword
-	}
-	if len(model.Password) < MinPasswordLen {
-		return nil, ErrPasswordTooShort
-	}
-	return model, nil
+	return model, ValidatePassword(model.Password)
 }
 
 func (e *UserInsertProcessors) ValidateCaptcha(i interface{}) (interface{}, *HttpError) {
@@ -186,7 +165,7 @@ func (e *UserInsertProcessors) InsertPassword(i interface{}) (interface{}, *Http
 	}
 
 	_, err = e.tx.Exec(
-		`INSERT INTO passwords (user, hash, salt, method) VALUES ($1, $2, $3, $4)`,
+		`INSERT INTO passwords ("user", hash, salt, method) VALUES ($1, $2, $3, $4)`,
 		e.userId, password.Hash, password.Salt, password.Method,
 	)
 

@@ -1,11 +1,9 @@
 package api
 
 import (
-	"encoding/json"
-	"github.com/jmoiron/sqlx"
-	"io/ioutil"
 	"log"
-	"net/http"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // @Title Send Password Recovery
@@ -14,6 +12,7 @@ import (
 // @Param   email     query  string   true  "User email"
 // @Success 200 plain
 // @Failure 400 plain
+// @Failure 404 plain
 // @Failure 500 plain
 // @Resource /password
 // @Router /password/recover [post]
@@ -21,12 +20,15 @@ func NewPasswordRecoverPostEndpoint(a *App) *Endpoint {
 	p := &PasswordRecoverInsertProcessers{
 		db:      a.db,
 		emailer: a.emailer,
+		handler: &JsonHandler{
+			Target: func() interface{} { return &PasswordRecoverPostModel{} },
+		},
 	}
 
 	return &Endpoint{
 		Path:    "/password/recover",
 		Methods: []string{"POST"},
-		Handler: p.Handler,
+		Handler: p.handler.Handle,
 		Processors: []Processor{
 			p.ValidateEmail,
 			p.Begin,
@@ -42,6 +44,7 @@ type PasswordRecoverInsertProcessers struct {
 	db      *sqlx.DB
 	tx      *sqlx.Tx
 	emailer EmailerModel
+	handler *JsonHandler
 	user    int
 	name    string
 	secret  string
@@ -49,22 +52,6 @@ type PasswordRecoverInsertProcessers struct {
 
 type PasswordRecoverPostModel struct {
 	Email string `json:"email"`
-}
-
-func (e *PasswordRecoverInsertProcessers) Handler(r *http.Request) (interface{}, *HttpError) {
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		log.Println(err)
-		return nil, ErrUnknown
-	}
-
-	m := &PasswordRecoverPostModel{}
-	err = json.Unmarshal(body, m)
-	if err != nil {
-		return nil, ErrInvalidJson
-	}
-
-	return m, nil
 }
 
 func (e *PasswordRecoverInsertProcessers) ValidateEmail(i interface{}) (interface{}, *HttpError) {
@@ -122,7 +109,7 @@ func (e *PasswordRecoverInsertProcessers) InsertRecovery(i interface{}) (interfa
 	}
 
 	_, err = e.tx.Exec(
-		`INSERT INTO recovery_secrets (secret, user)  VALUES ($1, $2)`,
+		`INSERT INTO recovery_secrets (secret, "user")  VALUES ($1, $2)`,
 		secret, e.user,
 	)
 

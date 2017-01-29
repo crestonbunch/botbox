@@ -1,11 +1,9 @@
 package api
 
 import (
-	"encoding/json"
-	"github.com/jmoiron/sqlx"
-	"io/ioutil"
 	"log"
-	"net/http"
+
+	"github.com/jmoiron/sqlx"
 )
 
 // @Title Change Password
@@ -22,71 +20,73 @@ import (
 func NewPasswordPutEndpoint(a *App) *Endpoint {
 	p := &PasswordUpdateProcessors{
 		db: a.db,
+		handler: &JsonHandlerWithAuth{
+			Target:  func() interface{} { return &PasswordPutModel{} },
+			session: &Session{db: a.db},
+		},
 	}
 
 	return &Endpoint{
-		Path:       "/password",
-		Methods:    []string{"PUT"},
-		Handler:    p.Handler,
-		Processors: []Processor{},
-		Writer:     nil,
+		Path:    "/password",
+		Methods: []string{"PUT"},
+		Handler: p.handler.HandleWithId,
+		Processors: []Processor{
+			p.CheckPasswordMatch,
+			p.ValidatePassword,
+			p.UpdatePassword,
+		},
+		Writer: nil,
 	}
 }
 
 type PasswordUpdateProcessors struct {
-	db *sqlx.DB
-	tx *sqlx.Tx
+	db      *sqlx.DB
+	handler *JsonHandlerWithAuth
 }
 
 type PasswordPutModel struct {
-	Session string
-	Old     string `json:"old"`
-	New     string `json:"new"`
+	Old string `json:"old"`
+	New string `json:"new"`
 }
 
-func (e *PasswordUpdateProcessors) Handler(r *http.Request) (interface{}, *HttpError) {
-	body, err := ioutil.ReadAll(r.Body)
+func (e *PasswordUpdateProcessors) CheckPasswordMatch(i interface{}) (interface{}, *HttpError) {
+	model := i.(*PasswordPutModel)
+
+	pass := &Password{}
+	e.db.Get(pass, `SELECT user, method, hash, salt FROM passwords
+		WHERE "user" = $1`, e.handler.User)
+
+	if pass.Matches(model.Old) != nil {
+		return nil, ErrInvalidPassword
+	}
+
+	return model, nil
+}
+
+func (e *PasswordUpdateProcessors) ValidatePassword(i interface{}) (interface{}, *HttpError) {
+	model := i.(*PasswordPutModel)
+
+	return model, ValidatePassword(model.New)
+}
+
+func (e *PasswordUpdateProcessors) UpdatePassword(i interface{}) (interface{}, *HttpError) {
+	model := i.(*PasswordPutModel)
+
+	password, err := Hasher.hash(model.New)
 	if err != nil {
 		log.Println(err)
 		return nil, ErrUnknown
 	}
 
-	m := &PasswordPutModel{}
-	err = json.Unmarshal(body, m)
-	if err != nil {
-		return nil, ErrInvalidJson
-	}
-
-	m.Session = r.Header.Get("Authorization")
-
-	return m, nil
-}
-
-func (e *PasswordUpdateProcessors) ValidateSecret(i interface{}) (interface{}, *HttpError) {
-	model := i.(*PasswordPutModel)
-
-	if model.Session == "" {
-		return nil, ErrInvalidSecret
-	}
-
-	var response struct {
-		Count int `db:"count"`
-		User  int `db:"user"`
-	}
-	err := e.db.Get(
-		&response,
-		`SELECT COUNT(secret) as count, user FROM session_secrets WHERE secret = $1
-		AND expires > NOW() AND revoked == FALSE`,
-		model.Session,
+	_, err = e.db.Exec(
+		`UPDATE passwords (salt, hash, method) VALUES ($1, $2, $3) 
+		WHERE "user" = $4`,
+		password.Salt, password.Hash, password.Method, e.handler.User,
 	)
 
 	if err != nil {
 		log.Println(err)
 		return nil, ErrUnknown
-	}
-
-	if response.Count == 0 {
-		return nil, ErrInvalidSecret
 	}
 
 	return model, nil

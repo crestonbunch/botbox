@@ -2,15 +2,12 @@ package api
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
-	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"runtime"
-	"strings"
 	"testing"
-	"testing/iotest"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 func TestNewUserPostEndpoint(t *testing.T) {
@@ -49,73 +46,6 @@ func TestNewUserPostEndpoint(t *testing.T) {
 
 		if val != exp {
 			t.Error("Processors in unexpected order.")
-		}
-	}
-}
-
-func TestUserInsertHandler(t *testing.T) {
-
-	type sampleResponse struct {
-		Model *UserPasswordPostModel
-		Error error
-	}
-
-	testCases := map[*http.Request]sampleResponse{
-		// Good case
-		httptest.NewRequest(
-			"POST", "http://local/user/password", strings.NewReader(`{
-			"name": "John Doe",
-			"password": "pass1234",
-			"email": "email@example.com",
-			"captcha": "valid"
-		}`)): sampleResponse{
-			Model: &UserPasswordPostModel{
-				Name:     "John Doe",
-				Password: "pass1234",
-				Email:    "email@example.com",
-				Captcha:  "valid",
-			},
-			Error: nil,
-		},
-
-		// Invalid JSON
-		httptest.NewRequest(
-			"POST", "http://local/user/password", strings.NewReader(`{
-			"name": "John Doe",
-			"password": "pass1234",
-			"email": "email@example.com",
-			"captcha": "valid",
-		}`)): sampleResponse{Model: nil, Error: ErrInvalidJson},
-
-		// Invalid reader
-		httptest.NewRequest(
-			"POST", "http://local/user/password",
-			iotest.TimeoutReader(strings.NewReader(`{
-					"name": "John Doe",
-					"password": "pass1234",
-					"email": "email@example.com",
-					"captcha": "valid"
-				}`)),
-		): sampleResponse{Model: nil, Error: ErrUnknown},
-	}
-
-	for req, expected := range testCases {
-		p := &UserInsertProcessors{}
-		model, err := p.Handler(req)
-
-		if err != nil && expected.Error == nil {
-			t.Error(err)
-		} else if err == nil && expected.Error != nil {
-			t.Error("Post model returned a nil error!")
-		} else if expected.Error == nil && err == nil {
-			// Why does deep equal not correctly compare nil and nil?
-		} else if !reflect.DeepEqual(expected.Error, err) {
-			t.Error("Post model returned the wrong error!")
-		}
-
-		if expected.Model != nil &&
-			!reflect.DeepEqual(*expected.Model, *model.(*UserPasswordPostModel)) {
-			t.Error("Post model loaded the wrong data!")
 		}
 	}
 }
@@ -445,7 +375,7 @@ func TestUserInsertPassword(t *testing.T) {
 		p := UserInsertProcessors{db: db, tx: tx, userId: 1}
 
 		q := mock.ExpectExec(
-			`INSERT INTO passwords \(user, hash, salt, method\) VALUES (.+)`,
+			`INSERT INTO passwords \(\"user\", hash, salt, method\) VALUES (.+)`,
 		).
 			WithArgs(1, sqlmock.AnyArg(), sqlmock.AnyArg(), "bcrypt")
 

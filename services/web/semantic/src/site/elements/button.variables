@@ -1,3 +1,4 @@
 /*******************************
     User Variable Overrides
 *******************************/
+@attachedBoxShadow: 0px 0px 0px 0px @borderColor;

@@ -3,11 +3,13 @@ package api
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"golang.org/x/crypto/bcrypt"
 	"io"
 )
 
 const SaltLength = 4
+const MinPasswordLen = 6
 
 // Global password hasher using cryptographically secure random number generator
 var Hasher = &PasswordHasher{rand.Reader}
@@ -42,9 +44,30 @@ func (hasher *PasswordHasher) hash(passw string) (*Password, error) {
 }
 
 type Password struct {
-	Id     int
-	User   int
-	Method string
-	Hash   string
-	Salt   string
+	User   int    `db:"user"`
+	Method string `db:"method"`
+	Hash   string `db:"hash"`
+	Salt   string `db:"salt"`
+}
+
+func (p *Password) Matches(other string) error {
+	switch p.Method {
+	case "bcrypt":
+		combined := p.Salt + other
+		return bcrypt.CompareHashAndPassword([]byte(p.Hash), []byte(combined))
+	default:
+		return errors.New("Unsupported password type.")
+	}
+}
+
+// Make sure a password is secure enough
+func ValidatePassword(password string) *HttpError {
+	if password == "" {
+		return ErrMissingPassword
+	}
+	if len(password) < MinPasswordLen {
+		return ErrPasswordTooShort
+	}
+
+	return nil
 }
