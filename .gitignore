@@ -7,3 +7,4 @@ env.sh
 settings.ts
 node_modules/
 services/web/semantic/src/definitions
+.vscode/
