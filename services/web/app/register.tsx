@@ -7,7 +7,7 @@ import { RegisterStore } from "./stores/ui/register";
 import { Settings } from "./settings";
 
 export interface RegisterProps {
-  store: RegisterStore;
+  registerStore: RegisterStore;
 }
 
 export interface RegisterState {
@@ -21,7 +21,7 @@ export class Register extends React.Component<RegisterProps, RegisterState> {
   }
 
   render() {
-    const store = this.props.store;
+    const store = this.props.registerStore;
 
     const successMsg = (store.success === true) ? (
       <Message success>

@@ -2,7 +2,9 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -12,7 +14,7 @@ import (
 // @Accept  json
 // @Param   email     query  string   true  "User email"
 // @Param   password  query  string   true  "User password"
-// @Success 200 plain string "The session token for authenticating"
+// @Success 200 plain SessionPostResponse "The session token for authenticating"
 // @Failure 400 plain
 // @Failure 500 plain
 // @Resource /session
@@ -38,18 +40,30 @@ func NewSessionPostEndpoint(a *App) *Endpoint {
 	}
 }
 
+// SessionInsertProcessors contains data and actions about the session
+// post process.
 type SessionInsertProcessors struct {
-	db      *sqlx.DB
-	handler *JsonHandler
-	user    int
-	secret  string
+	db         *sqlx.DB
+	handler    *JsonHandler
+	user       int
+	secret     string
+	expiration time.Time
 }
 
+// SessionPostModel is the JSON object that the user must provide.
 type SessionPostModel struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// SessionPostResponse is the JSON object that the endpoint returns.
+type SessionPostResponse struct {
+	User    int       `json:"user"`
+	Secret  string    `json:"secret"`
+	Expires time.Time `json:"expiration"`
+}
+
+// ValidateEmail validates the user email.
 func (e *SessionInsertProcessors) ValidateEmail(i interface{}) (interface{}, *HttpError) {
 	model := i.(*SessionPostModel)
 
@@ -78,6 +92,7 @@ func (e *SessionInsertProcessors) ValidateEmail(i interface{}) (interface{}, *Ht
 	return model, nil
 }
 
+// ValidatePassword validates the user's password.
 func (e *SessionInsertProcessors) ValidatePassword(i interface{}) (interface{}, *HttpError) {
 	model := i.(*SessionPostModel)
 
@@ -92,6 +107,7 @@ func (e *SessionInsertProcessors) ValidatePassword(i interface{}) (interface{}, 
 	return model, nil
 }
 
+// CreateSecret creates the session secret.
 func (e *SessionInsertProcessors) CreateSecret(i interface{}) (interface{}, *HttpError) {
 	model := i.(*SessionPostModel)
 
@@ -102,8 +118,11 @@ func (e *SessionInsertProcessors) CreateSecret(i interface{}) (interface{}, *Htt
 		return nil, ErrUnknown
 	}
 
-	_, err = e.db.Exec(
-		`INSERT INTO session_secrets (secret, "user")  VALUES ($1, $2)`,
+	var expiration time.Time
+	err = e.db.Get(
+		&expiration,
+		`INSERT INTO session_secrets (secret, "user") VALUES ($1, $2)
+		RETURNING expires`,
 		secret, e.user,
 	)
 
@@ -113,10 +132,21 @@ func (e *SessionInsertProcessors) CreateSecret(i interface{}) (interface{}, *Htt
 	}
 
 	e.secret = secret
+	e.expiration = expiration
 
 	return model, nil
 }
 
 func (e *SessionInsertProcessors) Write(i interface{}) ([]byte, *HttpError) {
-	return []byte(e.secret), nil
+	response := SessionPostResponse{
+		User:    e.user,
+		Secret:  e.secret,
+		Expires: e.expiration,
+	}
+	j, err := json.Marshal(response)
+	if err != nil {
+		log.Println(err)
+		return []byte{}, ErrUnknown
+	}
+	return j, nil
 }

@@ -39,7 +39,7 @@ type JsonHandlerWithAuth struct {
 	token       string
 	Target      func() interface{}
 	User        int
-	Permissions *PermissionSet
+	Permissions PermissionSet
 }
 
 // Extract the user Id and insert into the User property

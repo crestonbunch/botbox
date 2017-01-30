@@ -4,26 +4,22 @@ import (
 	"time"
 )
 
-// A user contains all the relevant bits of information about a user contained
-// in the database.
+// User is a struct containing information about a user.
 type User struct {
-	Id            int       `json:"-" db:"id"`
+	Id            int       `json:"id" db:"id"`
 	Name          string    `json:"name" db:"name"`
 	Email         string    `json:"-" db:"email"`
 	Joined        time.Time `json:"joined" db:"joined"`
-	PermissionSet string    `json:"-" db:"permission_set"`
+	PermissionSet string    `json:"permission_set" db:"permission_set"`
 
-	Permissions *PermissionSet `json:"-"`
-	Profile     *Profile       `json:"profile"`
+	Permissions PermissionSet `json:"permissions"`
+	Profile     *Profile      `json:"profile"`
 }
 
-// A permission set is a set of permissions that a user has.
-type PermissionSet struct {
-	Name        string `db:"name"`
-	Permissions []string
-}
+// PermissionSet is a set of permissions that a user has.
+type PermissionSet []string
 
-// A user's profile
+// Profile is the public facing profile of a user.
 type Profile struct {
 	Id           int    `json:"-" `
 	Bio          string `json:"bio" db:"bio"`
@@ -33,12 +29,14 @@ type Profile struct {
 	Github       string `json:"github" db:"github"`
 }
 
+// HasPermission checks if a user has the given permission.
 func (u *User) HasPermission(perm string) bool {
 	return u.Permissions.HasPermission(perm)
 }
 
-func (p *PermissionSet) HasPermission(perm string) bool {
-	for _, x := range p.Permissions {
+// HasPermission checks if a permission set contains the given permission.
+func (p PermissionSet) HasPermission(perm string) bool {
+	for _, x := range p {
 		if x == perm {
 			return true
 		}

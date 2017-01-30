@@ -74,7 +74,7 @@ func TestJsonHandler(t *testing.T) {
 type mockSession struct {
 	ReturnUser       int
 	ReturnUserError  error
-	ReturnPerms      *PermissionSet
+	ReturnPerms      PermissionSet
 	ReturnPermsError error
 }
 
@@ -82,7 +82,7 @@ func (s *mockSession) GetUserId(string) (int, error) {
 	return s.ReturnUser, s.ReturnUserError
 }
 
-func (s *mockSession) GetPermissions(string) (*PermissionSet, error) {
+func (s *mockSession) GetPermissions(string) (PermissionSet, error) {
 	return s.ReturnPerms, s.ReturnPermsError
 }
 
@@ -192,7 +192,7 @@ func TestJsonHandlerWithPermissions(t *testing.T) {
 		Model *Model
 		Error error
 		User  int
-		Perms *PermissionSet
+		Perms PermissionSet
 	}
 
 	testCases := map[*http.Request]sampleResponse{
@@ -204,14 +204,14 @@ func TestJsonHandlerWithPermissions(t *testing.T) {
 			Auth: "Bearer 12345",
 			Sess: &mockSession{
 				ReturnUser:  101,
-				ReturnPerms: &PermissionSet{Permissions: []string{"DUMMY_PERM"}},
+				ReturnPerms: PermissionSet([]string{"DUMMY_PERM"}),
 			},
 			Model: &Model{
 				Dummy: "valid",
 			},
 			Error: nil,
 			User:  101,
-			Perms: &PermissionSet{Permissions: []string{"DUMMY_PERM"}},
+			Perms: PermissionSet([]string{"DUMMY_PERM"}),
 		},
 
 		// Invalid JSON

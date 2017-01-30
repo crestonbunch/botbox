@@ -6,9 +6,9 @@ import (
 
 func TestUserHasPermission(t *testing.T) {
 	u := &User{
-		Permissions: &PermissionSet{
-			Permissions: []string{"POST_COMMENT", "UPLOAD_FILE", "EDIT_PROFILE"},
-		},
+		Permissions: PermissionSet([]string{
+			"POST_COMMENT", "UPLOAD_FILE", "EDIT_PROFILE",
+		}),
 	}
 
 	testCases := []struct {

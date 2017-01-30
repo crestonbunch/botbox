@@ -7,7 +7,7 @@ import (
 // A generic interface for something that retrieves session data.
 type SessionModel interface {
 	GetUserId(string) (int, error)
-	GetPermissions(string) (*PermissionSet, error)
+	GetPermissions(string) (PermissionSet, error)
 }
 
 // A concrete implementation of SessionModel for a Postgres backend.
@@ -33,7 +33,7 @@ func (s *Session) GetUserId(secret string) (int, error) {
 	return id, nil
 }
 
-func (s *Session) GetPermissions(secret string) (*PermissionSet, error) {
+func (s *Session) GetPermissions(secret string) (PermissionSet, error) {
 
 	rows, err := s.db.Queryx(
 		`SELECT permission FROM permission_set_permissions, users, session_secrets
@@ -46,7 +46,7 @@ func (s *Session) GetPermissions(secret string) (*PermissionSet, error) {
 		return nil, err
 	}
 
-	permissions := PermissionSet{Permissions: []string{}}
+	permissions := PermissionSet([]string{})
 
 	for rows.Next() {
 		var result string
@@ -55,8 +55,8 @@ func (s *Session) GetPermissions(secret string) (*PermissionSet, error) {
 			return nil, err
 		}
 
-		permissions.Permissions = append(permissions.Permissions, result)
+		permissions = append(permissions, result)
 	}
 
-	return &permissions, nil
+	return permissions, nil
 }

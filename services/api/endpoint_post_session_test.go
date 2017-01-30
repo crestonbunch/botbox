@@ -5,6 +5,9 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
+
+	"encoding/json"
 
 	"github.com/jmoiron/sqlx"
 	"gopkg.in/DATA-DOG/go-sqlmock.v1"
@@ -233,15 +236,18 @@ func TestPostSessionCreateSecret(t *testing.T) {
 		}
 		p := SessionInsertProcessors{db: db, user: test.user}
 
-		q := mock.ExpectExec(
-			`INSERT INTO session_secrets \(secret, \"user\"\) VALUES (.+)`,
+		q := mock.ExpectQuery(
+			`INSERT INTO session_secrets \(secret, \"user\"\) VALUES (.+) `+
+				`RETURNING expires`,
 		).
 			WithArgs(sqlmock.AnyArg(), test.user)
 
+		tm := time.Now()
 		if test.err != nil {
 			q.WillReturnError(test.err)
 		} else {
-			q.WillReturnResult(sqlmock.NewResult(1, 1))
+			q.WillReturnRows(sqlmock.NewRows([]string{"expires"}).
+				AddRow(tm))
 		}
 
 		model := &SessionPostModel{}
@@ -251,6 +257,14 @@ func TestPostSessionCreateSecret(t *testing.T) {
 			t.Error("Correct model was not returned.")
 		}
 
+		if err == nil && (p.secret == "") {
+			t.Error("Secret was not set correctly")
+		}
+
+		if err == nil && p.expiration != tm {
+			t.Error("Time was not set correctly")
+		}
+
 		if err = mock.ExpectationsWereMet(); err != nil {
 			t.Error(err)
 		}
@@ -258,14 +272,21 @@ func TestPostSessionCreateSecret(t *testing.T) {
 }
 
 func TestPostSessionWriter(t *testing.T) {
+	tm := time.Now()
 	testCases := []struct {
 		Secret    string
-		Expect    []byte
+		User      int
+		Expires   time.Time
+		Expect    SessionPostResponse
 		ExpectErr error
 	}{
 		{
-			Secret:    "1234",
-			Expect:    []byte("1234"),
+			Secret:  "1234",
+			User:    123,
+			Expires: tm,
+			Expect: SessionPostResponse{
+				Secret: "1234", User: 123, Expires: tm,
+			},
 			ExpectErr: nil,
 		},
 	}
@@ -273,7 +294,9 @@ func TestPostSessionWriter(t *testing.T) {
 	for _, test := range testCases {
 
 		p := &SessionInsertProcessors{
-			secret: test.Secret,
+			secret:     test.Secret,
+			user:       test.User,
+			expiration: test.Expires,
 		}
 
 		w, err := p.Write(&SessionPostModel{})
@@ -282,8 +305,10 @@ func TestPostSessionWriter(t *testing.T) {
 			t.Error(err)
 			t.Error("Error did not match expectation!")
 		}
+		var result SessionPostResponse
+		json.Unmarshal(w, &result)
 
-		if !reflect.DeepEqual(string(w), string(test.Expect)) {
+		if !reflect.DeepEqual(result, test.Expect) {
 			t.Errorf("Correct secret %s was not written (%s)!", test.Expect, w)
 		}
 	}

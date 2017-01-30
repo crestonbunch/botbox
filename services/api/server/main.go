@@ -1,14 +1,15 @@
 package main
 
 import (
-	"github.com/crestonbunch/botbox/services/api"
-	"github.com/jmoiron/sqlx"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/smtp"
 	"os"
 	"time"
+
+	"github.com/crestonbunch/botbox/services/api"
+	"github.com/jmoiron/sqlx"
 )
 
 type Config struct {
@@ -90,6 +91,7 @@ func main() {
 
 	app := api.NewApp(db, recaptcha, emailer)
 
+	app.Attach(api.NewUserIdGetEndpoint(app))
 	app.Attach(api.NewUserPostEndpoint(app))
 
 	app.Attach(api.NewEmailGetEndpoint(app))
