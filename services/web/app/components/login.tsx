@@ -1,36 +1,58 @@
 import * as React from "react";
 import "whatwg-fetch";
 import { observer } from "mobx-react";
+import { observable, autorun, action } from "mobx";
+import { Api } from '../api';
 import { Message, Input, Popup, Button, Form } from "semantic-ui-react";
-import { LoginStore } from "../stores/ui/login"
+import { Store, SessionData } from "../store"
 
 export interface LoginProps {
   trigger: JSX.Element;
-  loginStore: LoginStore;
+  store: Store;
 }
 
 @observer
 export class Login extends React.Component<LoginProps, {}> {
 
-  render() {
-    const loginStore = this.props.loginStore;
+  @observable email: string = "";
+  @observable password: string = "";
 
-    const errMsg = (loginStore.error !== "") ? (
-      <Message error>{loginStore.error}</Message>
+  @observable error: string = "";
+
+  // tracks if an asynchronous operation is running
+  // that should disable the form until it is done.
+  @observable busy: boolean = false;
+
+  @action doLogin() {
+    this.busy = true;
+    Api.login(this.email, this.password).then((session: SessionData) => {
+      this.props.store.login(session);
+      this.busy = false;
+    }).catch((reason: any) => {
+      this.error = reason as any;
+      this.busy = false;
+    });
+  }
+
+  render() {
+    const store = this.props.store;
+
+    const errMsg = (this.error !== "") ? (
+      <Message error>{this.error}</Message>
     ) : null;
 
-    const form = (<Form loading={loginStore.busy}>
+    const form = (<Form loading={this.busy}>
       {errMsg}
       <Form.Field>
         <Input icon='mail' iconPosition='left' placeholder="Email"
-          onChange={(_, val) => loginStore.email = val.value} />
+          onChange={(_, val) => this.email = val.value} />
       </Form.Field>
       <Form.Field>
         <Input type="password" icon='lock' iconPosition='left'
           placeholder="Password"
-          onChange={(_, val) => loginStore.password = val.value} />
+          onChange={(_, val) => this.password = val.value} />
       </Form.Field>
-      <Button primary onClick={(e) => {e.preventDefault(); loginStore.doLogin()}}>
+      <Button primary onClick={(e) => { e.preventDefault(); this.doLogin() }}>
         Login
       </Button>
     </Form>)
@@ -44,5 +66,3 @@ export class Login extends React.Component<LoginProps, {}> {
   }
 
 }
-
-

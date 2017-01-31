@@ -1,12 +1,12 @@
 import * as React from "react";
 import { Icon, Message, Container, Header, Image, Button, Divider } from "semantic-ui-react"
 
-import { UserStore } from "../stores/domain/user"
+import { Store } from "../store"
 import { Navigation } from "./navigation";
 import { Footer } from "./footer";
 
 export interface PageProps {
-  userStore: UserStore;
+  store: Store;
 }
 
 export class Page extends React.Component<PageProps, {}> {
@@ -18,7 +18,7 @@ export class Page extends React.Component<PageProps, {}> {
   render() {
     return (
       <div>
-        <Navigation userStore={this.props.userStore} />
+        <Navigation store={this.props.store} />
         {this.props.children}
         <Footer />
       </div>

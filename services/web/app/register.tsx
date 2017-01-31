@@ -1,13 +1,16 @@
 import * as React from "react";
+import { browserHistory } from 'react-router'
 import { observer } from "mobx-react";
-import { Divider, Grid, Image, Message, Icon, Form, Button, Container, Segment } from "semantic-ui-react";
-import { Input } from "./components/input";
+import { observable, autorun, action } from "mobx";
+import { Input, Divider, Grid, Image, Message, Icon, Form, Button, Container, Segment } from "semantic-ui-react";
+import { Api } from './api';
 import { Recaptcha } from "./components/recaptcha";
-import { RegisterStore } from "./stores/ui/register";
+import { FieldError } from "./components/forms";
 import { Settings } from "./settings";
+import { Store, SessionData } from "./store"
 
 export interface RegisterProps {
-  registerStore: RegisterStore;
+  store: Store;
 }
 
 export interface RegisterState {
@@ -16,48 +19,154 @@ export interface RegisterState {
 @observer
 export class Register extends React.Component<RegisterProps, RegisterState> {
 
+  @observable name: string = "";
+  @observable email: string = "";
+  @observable password: string = "";
+  @observable captcha: string = "";
+
+  @observable nameError: string = "";
+  @observable emailError: string = "";
+  @observable passwordError: string = "";
+  @observable captchaError: string = "";
+  @observable serverError: string = "";
+
+  @observable success: boolean = false;
+  @observable busy: boolean = false;
+  @observable validating: boolean = false;
+
+  checkNameLength = autorun(() => {
+    if (this.name.length > Api.MAX_NAME_LENGTH) {
+      this.nameError = "Name must be no more than 20 characters.";
+    } else {
+      this.nameError = "";
+    }
+  });
+
+  checkEmailExists = autorun(() => {
+    if (this.email == "") return;
+
+    this.validating = true;
+    fetch('/api/email/' + this.email).
+      then((response: Response) => {
+        if (response.status == 200) {
+          this.emailError = "That email is already in use!";
+        } else {
+          this.emailError = "";
+        }
+        this.validating = false;
+      }).catch(() => {
+        this.validating = false;
+      });
+  });
+
+  clearPasswordError = autorun(() => {
+    if (this.password.length > Api.MIN_PASSWORD_LENGTH) {
+      this.passwordError = "";
+    }
+  });
+
+  clearCaptchaError = autorun(() => {
+    if (this.captcha != "") {
+      this.captchaError = "";
+    }
+  });
+
+  @action doRegister() {
+    if (this.validating) return;
+    this.serverError = "";
+
+    let valid = true;
+    if (this.name == "") {
+      this.nameError = "Please enter a display name.";
+      valid = false;
+    }
+    if (this.email == "") {
+      this.emailError = "Please enter an email.";
+      valid = false;
+    } else if (this.email.indexOf('@') < 0) {
+      this.emailError = "Please provide a valid email.";
+      valid = false;
+    }
+    if (this.password == "") {
+      this.passwordError = "Please enter a password.";
+      valid = false;
+    } else if (this.password.length < Api.MIN_PASSWORD_LENGTH) {
+      this.passwordError = "Password must be at least 6 characters."
+      valid = false;
+    }
+    if (this.captcha == "") {
+      this.captchaError = "Please answer the captcha."
+      valid = false;
+    }
+    if (!valid) return;
+
+    this.busy = true;
+
+    Api.register(this.name, this.email, this.password, this.captcha)
+      .then((result: void) => {
+      }).catch((reason: any) => {
+        this.serverError = reason as string;
+        this.busy = false;
+      }).then(() => {
+        return Api.login(this.email, this.password);
+      }).catch((reason: any) => {
+        this.serverError = reason as string;
+        this.busy = false;
+      }).then((session: SessionData) => {
+        this.busy = false;
+        this.props.store.login(session);
+        browserHistory.push("/");
+      });
+  }
+
   constructor(props: RegisterProps) {
     super(props);
   }
 
   render() {
-    const store = this.props.registerStore;
-
-    const successMsg = (store.success === true) ? (
+    const successMsg = (this.success === true) ? (
       <Message success>
         You have been successfully registered!
         Please check your email to finish verifying your account.
       </Message>
     ) : null;
 
-    const errMsg = (store.serverError !== "") ? (
-      <Message error>{store.serverError}</Message>
+    const errMsg = (this.serverError !== "") ? (
+      <Message error>{this.serverError}</Message>
     ) : null;
 
-    const form = (store.success === false) ? (
-      <Form error={store.serverError != ""} loading={store.busy}>
-        <Input label="Display name"
-          placeholder="Enter a display name."
-          error={store.nameError}
-          onChange={(val) => store.name = val}
-          type="text" />
-        <Input label="Email"
-          placeholder="Enter a valid email."
-          error={store.emailError}
-          onChange={(val) => store.email = val}
-          type="text" />
-        <Input label="Password"
-          placeholder="Enter a good password."
-          error={store.passwordError}
-          onChange={(val) => store.password = val}
-          type="password" />
-        <Recaptcha sitekey={Settings.RECAPTCHA_KEY}
-          error={store.recaptchaError}
-          onChange={(val) => store.recaptcha = val} />
+    const form = (this.success === false) ? (
+      <Form error={this.serverError != ""} loading={this.busy}>
+        <Form.Field error={this.nameError != ""}>
+          <FieldError error={this.nameError} />
+          <Input icon="user" iconPosition="left"
+            placeholder="Enter a display name."
+            onChange={(_, val) => this.name = val.value}
+            type="text" />
+        </Form.Field>
+        <Form.Field>
+          <FieldError error={this.emailError} />
+          <Input icon="mail" iconPosition="left"
+            placeholder="Enter a valid email."
+            onChange={(_, val) => this.email = val.value}
+            type="text" />
+        </Form.Field>
+        <Form.Field>
+          <FieldError error={this.passwordError} />
+          <Input icon="lock" iconPosition="left"
+            placeholder="Enter a good password."
+            onChange={(_, val) => this.password = val.value}
+            type="password" />
+        </Form.Field>
+        <Form.Field required error={this.captchaError != ""}>
+          <FieldError error={this.captchaError} />
+          <Recaptcha sitekey={Settings.RECAPTCHA_KEY}
+            onChange={(val) => this.captcha = val} />
+        </Form.Field>
         <Divider hidden />
         <Button primary
-          disabled={store.validating}
-          onClick={(e) => { e.preventDefault(); store.doRegister() }}>
+          disabled={this.validating}
+          onClick={(e) => { e.preventDefault(); this.doRegister() }}>
           Join
         </Button>
       </Form>

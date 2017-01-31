@@ -16,6 +16,12 @@
   version "2.0.45"
   resolved "https://registry.yarnpkg.com/@types/history/-/history-2.0.45.tgz#c76d79a65d189220d9d50f62e0143bdac30a564b"
 
+"@types/moment":
+  version "2.13.0"
+  resolved "https://registry.yarnpkg.com/@types/moment/-/moment-2.13.0.tgz#604ebd189bc3bc34a1548689404e61a2a4aac896"
+  dependencies:
+    moment "*"
+
 "@types/react", "@types/react@*":
   version "15.0.4"
   resolved "https://registry.yarnpkg.com/@types/react/-/react-15.0.4.tgz#97aedbba00448a137331aa8450232124aeb8d426"
@@ -2490,6 +2496,10 @@ mobx-react@^4.1.0:
 mobx@^3.0.2:
   version "3.0.2"
   resolved "https://registry.yarnpkg.com/mobx/-/mobx-3.0.2.tgz#ade8e83434f7a73868d2632603b6d17da530427c"
+
+moment, moment@*:
+  version "2.17.1"
+  resolved "https://registry.yarnpkg.com/moment/-/moment-2.17.1.tgz#fed9506063f36b10f066c8b59a144d7faebe1d82"
 
 ms@0.7.1:
   version "0.7.1"
