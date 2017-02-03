@@ -105,6 +105,9 @@ func main() {
 	app.Attach(api.NewSessionPostEndpoint(app))
 	app.Attach(api.NewSessionPutEndpoint(app))
 
+	app.Attach(api.NewNotificationsGetEndpoint(app))
+	app.Attach(api.NewNotificationsPutEndpoint(app))
+
 	srv := &http.Server{
 		Handler: app,
 		Addr:    ":8081",

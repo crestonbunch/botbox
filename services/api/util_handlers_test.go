@@ -350,3 +350,65 @@ func TestURLPathHandler(t *testing.T) {
 		}
 	}
 }
+
+func TestURLPathHandlerWithId(t *testing.T) {
+	type Model struct {
+		Dummy string `json:"dummy"`
+	}
+
+	type sampleResponse struct {
+		Auth  string
+		User  int
+		Sess  SessionModel
+		Model *Model
+		Error *HttpError
+	}
+
+	testCases := map[string]sampleResponse{
+		// Good case
+		"/path/var1": sampleResponse{
+			Auth: "Bearer 12345",
+			User: 123,
+			Sess: &mockSession{ReturnUser: 123},
+			Model: &Model{
+				Dummy: "var1",
+			},
+			Error: nil,
+		},
+	}
+
+	for uri, expected := range testCases {
+		handler := &URLPathHandlerWithAuth{
+			Target:  func() interface{} { return &Model{} },
+			session: expected.Sess,
+		}
+
+		r := mux.NewRouter()
+		r.HandleFunc("/path/{dummy}", func(w http.ResponseWriter, req *http.Request) {
+			model, err := handler.HandleWithId(req)
+
+			if err != expected.Error {
+				t.Error("Error was not expected.")
+			}
+
+			if model != nil {
+				if !reflect.DeepEqual(*expected.Model, *model.(*Model)) {
+					t.Error("Model loaded the wrong data!")
+				}
+			}
+
+			if handler.User != expected.User {
+				t.Error("User was not set correctly.")
+			}
+
+		})
+
+		serv := httptest.NewServer(r)
+		defer serv.Close()
+
+		_, err := http.Get(serv.URL + uri)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+}

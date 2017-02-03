@@ -1,4 +1,4 @@
-import { SessionData } from "./store"
+import { SessionData, Notification } from "./models"
 
 export class Api {
 
@@ -41,7 +41,7 @@ export class Api {
         return fetch('/api/session', {
             method: "POST",
             body: JSON.stringify({ email: email, password: password })
-        }).then(function(response: Response) {
+        }).then(function (response: Response) {
             if (response.status == 200) {
                 return response.json();
             } else {
@@ -49,32 +49,32 @@ export class Api {
                     throw value;
                 });
             }
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
-        }).then(function(value: SessionPostResponse) {
+        }).then(function (value: SessionPostResponse) {
             session.id = value.user;
             session.secret = value.secret;
             session.expiration = new Date(value.expiration);
             return fetch('/api/user/id/' + String(value.user));
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
-        }).then(function(response: Response) {
+        }).then(function (response: Response) {
             if (response.status == 200) {
                 return response.json();
             } else {
-                return response.text().then(function(value: string) {
+                return response.text().then(function (value: string) {
                     throw value;
                 });
             }
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
-        }).then(function(value: UserIdGetResponse) {
+        }).then(function (value: UserIdGetResponse) {
             session.name = value.name;
             session.permissions = value.permissions;
             session.permissionSet = value.permission_set;
 
             return session;
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
         });
     }
@@ -94,32 +94,111 @@ export class Api {
         return fetch('/api/user', {
             method: 'POST',
             body: JSON.stringify(request)
-        }).then(function(response: Response) {
+        }).then(function (response: Response) {
             if (response.status != 200) {
                 // received an error response
                 return response.text().then((value: string) => {
                     throw value;
                 });
             }
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
-        }).then(function(value: void) {
-            // User account was created, so send an email.
-            return fetch('/api/email/verify', {
-                method: 'POST',
-                body: JSON.stringify({ email: email })
-            });
-        }).catch(function(reason: any) {
-            throw reason;
-        }).then(function(response: Response) {
+        })
+    }
+
+    static verify(secret: string, email: string): Promise<void> {
+        // Send a verification email
+        return fetch('/api/email/verify', {
+            method: 'POST',
+            headers: new Headers({ Authorization: "Bearer " + secret }),
+            body: JSON.stringify({ email: email }),
+        }).then(function (response: Response) {
             // There was an error with the email sending service.
             if (response.status != 200) {
                 return response.text().then((message: string) => {
                     throw message;
                 });
             }
-        }).catch(function(reason: any) {
+        }).catch(function (reason: any) {
             throw reason;
         });
     }
+
+    static notifications(secret: string): Promise<Notification[]> {
+        return fetch('/api/notifications', {
+            method: 'GET',
+            headers: new Headers({ Authorization: "Bearer " + secret }),
+        }).then(function (response: Response) {
+            // There was an error with the email sending service.
+            if (response.status != 200) {
+                return response.text().then((message: string) => {
+                    throw message;
+                });
+            }
+
+            return response.json();
+        }).catch(function (reason: any) {
+            throw reason;
+        }).then(function (notifications: any) {
+            let list: Notification[] = [];
+            for (let n of notifications) {
+                list.push({
+                    id: n.id,
+                    type: n.type,
+                    parameters: n.parameters !== null ? n.parameters : null,
+                    issued: new Date(n.issued),
+                    read: n.read !== null ? new Date(n.read) : null,
+                    dismissed: (n.dismissed !== null)
+                        ? new Date(n.dismissed) : null,
+                });
+            }
+            return list;
+        }).catch(function (reason: any) {
+            throw reason;
+        });
+    }
+
+    /**
+     * Mark a list of notifications as read.
+     */
+    static read(secret: string, notifs: Notification[]): Promise<void> {
+        let ids = notifs.map((n: Notification) => {return n.id});
+        return fetch('/api/notifications', {
+            method: 'PUT',
+            headers: new Headers({ Authorization: "Bearer " + secret }),
+            body: JSON.stringify({notifications: ids, read: true}),
+        }).then(function (response: Response) {
+            // There was an error with the email sending service.
+            if (response.status != 200) {
+                return response.text().then((message: string) => {
+                    throw message;
+                });
+            }
+        }).catch(function (reason: any) {
+            throw reason;
+        });
+    }
+
+    /**
+     * Mark a list of notifications as dismissed.
+     */
+    static dismiss(secret: string, notifs: Notification[]): Promise<void> {
+        let ids = notifs.map((n: Notification) => {return n.id});
+        return fetch('/api/notifications', {
+            method: 'PUT',
+            headers: new Headers({ Authorization: "Bearer " + secret }),
+            body: JSON.stringify({notifications: ids, dismissed: true}),
+        }).then(function (response: Response) {
+            // There was an error with the email sending service.
+            if (response.status != 200) {
+                return response.text().then((message: string) => {
+                    throw message;
+                });
+            }
+        }).catch(function (reason: any) {
+            throw reason;
+        });
+    }
+
+
 }

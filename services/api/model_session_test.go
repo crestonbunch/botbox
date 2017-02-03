@@ -2,10 +2,11 @@ package api
 
 import (
 	"errors"
-	"github.com/jmoiron/sqlx"
-	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 	"reflect"
 	"testing"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
 func TestGetUserId(t *testing.T) {
@@ -44,17 +45,17 @@ func TestGetUserId(t *testing.T) {
 
 		if test.ResultErr != nil {
 			mock.ExpectQuery(
-				`SELECT id FROM users, session_secrets ` +
-					`WHERE secret = (.+) AND expires > NOW\(\) AND used == FALSE ` +
-					`AND user = id`,
+				`SELECT id FROM users INNER JOIN session_secrets ` +
+					`ON \(users.id = session_secrets.user\) ` +
+					`WHERE secret = (.+) AND expires > NOW\(\) AND revoked = FALSE`,
 			).
 				WithArgs(test.Secret).
 				WillReturnError(test.ResultErr)
 		} else {
 			mock.ExpectQuery(
-				`SELECT id FROM users, session_secrets ` +
-					`WHERE secret = (.+) AND expires > NOW\(\) AND used == FALSE ` +
-					`AND user = id`,
+				`SELECT id FROM users INNER JOIN session_secrets ` +
+					`ON \(users.id = session_secrets.user\) ` +
+					`WHERE secret = (.+) AND expires > NOW\(\) AND revoked = FALSE`,
 			).
 				WithArgs(test.Secret).
 				WillReturnRows(test.ResultRows)
@@ -63,11 +64,11 @@ func TestGetUserId(t *testing.T) {
 		id, err := testSession.GetUserId(test.Secret)
 
 		if id != test.ExpectId {
-			t.Error("Returned wrong id!")
+			t.Errorf("Expected id %d got %d", test.ExpectId, id)
 		}
 
 		if err != test.ExpectErr {
-			t.Error("Returned wrong error!")
+			t.Errorf("Expected err '%s' got '%s'\n", test.ExpectErr, err)
 		}
 	}
 }
@@ -109,17 +110,27 @@ func TestGetPermissions(t *testing.T) {
 
 		if test.ResultErr != nil {
 			mock.ExpectQuery(
-				`SELECT permission FROM permission_set_permissions, users, session_secrets ` +
-					`WHERE secret = (.+) AND users.id = session_secrets\.user ` +
-					`AND permission_set_permissions\.permission_set = users\.permission_set`,
+				`SELECT permission FROM permission_set_permissions ` +
+					`INNER JOIN users ` +
+					`ON \(users.permission_set = permission_set_permissions.permission_set\) ` +
+					`INNER JOIN session_secrets ` +
+					`ON \(session_secrets.user = users.id\) ` +
+					`WHERE session_secrets.secret = (.+) ` +
+					`AND users.id = session_secrets.user ` +
+					`AND permission_set_permissions.permission_set = users.permission_set`,
 			).
 				WithArgs(test.Secret).
 				WillReturnError(test.ResultErr)
 		} else {
 			mock.ExpectQuery(
-				`SELECT permission FROM permission_set_permissions, users, session_secrets ` +
-					`WHERE secret = (.+) AND users.id = session_secrets\.user ` +
-					`AND permission_set_permissions\.permission_set = users\.permission_set`,
+				`SELECT permission FROM permission_set_permissions ` +
+					`INNER JOIN users ` +
+					`ON \(users.permission_set = permission_set_permissions.permission_set\) ` +
+					`INNER JOIN session_secrets ` +
+					`ON \(session_secrets.user = users.id\) ` +
+					`WHERE session_secrets.secret = (.+) ` +
+					`AND users.id = session_secrets.user ` +
+					`AND permission_set_permissions.permission_set = users.permission_set`,
 			).
 				WithArgs(test.Secret).
 				WillReturnRows(test.ResultRows)

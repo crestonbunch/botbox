@@ -20,9 +20,9 @@ func (s *Session) GetUserId(secret string) (int, error) {
 	var id int
 	err := s.db.Get(
 		&id,
-		`SELECT id FROM users, session_secrets
-		WHERE secret = $1 AND expires > NOW() AND used == FALSE
-		AND user = id`,
+		`SELECT id FROM users INNER JOIN session_secrets 
+		ON (users.id = session_secrets.user)
+		WHERE secret = $1 AND expires > NOW() AND revoked = FALSE`,
 		secret,
 	)
 
@@ -36,8 +36,13 @@ func (s *Session) GetUserId(secret string) (int, error) {
 func (s *Session) GetPermissions(secret string) (PermissionSet, error) {
 
 	rows, err := s.db.Queryx(
-		`SELECT permission FROM permission_set_permissions, users, session_secrets
-		WHERE secret = $1 AND users.id = session_secrets.user
+		`SELECT permission FROM permission_set_permissions
+		INNER JOIN users 
+		 ON (users.permission_set = permission_set_permissions.permission_set)
+		INNER JOIN session_secrets 
+		 ON (session_secrets.user = users.id)
+		WHERE session_secrets.secret = $1 
+		AND users.id = session_secrets.user
 		AND permission_set_permissions.permission_set = users.permission_set`,
 		secret,
 	)

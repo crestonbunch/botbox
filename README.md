@@ -20,11 +20,12 @@ Currently the following is implemented and working:
 * Sandbox service which spawns isolated Docker containers and plays games
   started via an HTTP API.
 * Database container with empty PostgreSQL database
+* Account creation / login
 
 Remaining work:
 
 * Finish the web API
-* Build a web interface
+* Finish web interface
 * Create a scheduler service for matchmaking
 * Continuous deployment and upgrade scripts
 
@@ -70,3 +71,37 @@ Deploying
 
 Right now there is a simple ./deploy.sh script you can run to start up the
 docker containers.
+
+Environment variables
+---------------------
+You must create an ```env.sh``` script to correctly start the Botbox services.
+
+```
+$ cp env.sample.sh env.sh
+$ vim env.sh
+```
+
+To deploy all services on one box:
+
+```$ ./deploy.sh```
+
+If you make changes to a single service,
+you can deploy only that service to save time:
+
+```$ ./deploy.sh api```
+
+```$ ./deploy.sh database```
+
+```$ ./deploy.sh web```
+
+```$ ./deploy.sh nginx```
+
+To delete the database and create an empty one:
+
+```$ ./deploy.sh database new```
+
+Visit http://localhost to see the web interface.
+
+Currently the deployment script starts Docker containers only on the current
+machine, but future updates will allow deploying services on multiple machines
+connected to the same network.

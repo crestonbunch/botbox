@@ -116,3 +116,35 @@ func (h *URLPathHandler) Handle(r *http.Request) (interface{}, *HttpError) {
 
 	return m, nil
 }
+
+// URLPathHandlerWithAuth takes URL parameters of the form /path/{var1}/{var2}
+// extracted by a gorilla mux and converts them into JSON then unmarshals them
+// into the target interface
+type URLPathHandlerWithAuth struct {
+	session     SessionModel
+	token       string
+	Target      func() interface{}
+	User        int
+	Permissions PermissionSet
+}
+
+// HandleWithId takes the path and puts the URL parameters into the target interfaced
+// given to the URLPathHandler struct. It also gets the user id and puts it in
+// the handler struct.
+func (h *URLPathHandlerWithAuth) HandleWithId(r *http.Request) (interface{}, *HttpError) {
+	parent := &URLPathHandler{Target: h.Target}
+	target, parseerr := parent.Handle(r)
+	if parseerr != nil {
+		return nil, parseerr
+	}
+
+	h.token = ParseAuthSecret(r.Header)
+	user, err := h.session.GetUserId(h.token)
+	if err != nil {
+		log.Printf("Error getting user id: %s\n", err)
+		return nil, ErrUnknown
+	}
+	h.User = user
+
+	return target, nil
+}

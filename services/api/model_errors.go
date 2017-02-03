@@ -49,6 +49,9 @@ var ErrMissingParameter = &HttpError{"Missing parameter.", 400}
 // ErrNotAnInteger is returned when an integer is not received.
 var ErrNotAnInteger = &HttpError{"Please provide an integer.", 400}
 
+// ErrMissingNotifications is returned when updating no notifications
+var ErrMissingNotifications = &HttpError{"No notifications received.", 400}
+
 // HttpError is returned to a user if something goes wrong.
 type HttpError struct {
 	Message string

@@ -29,11 +29,12 @@ func TestNewEmailVerifyPostEndpoint(t *testing.T) {
 		{e.Processors[0], p.ValidateEmail},
 		{e.Processors[1], p.Begin},
 		{e.Processors[2], p.InsertVerification},
-		{e.Processors[3], p.SendVerification},
-		{e.Processors[4], p.Commit},
+		{e.Processors[3], p.InsertNotification},
+		{e.Processors[4], p.SendVerification},
+		{e.Processors[5], p.Commit},
 	}
 
-	if len(e.Processors) != 5 {
+	if len(e.Processors) != 6 {
 		t.Error("Incorrect number of processors.")
 	}
 
@@ -213,6 +214,66 @@ func TestEmailVerifyInsert(t *testing.T) {
 		m, err := p.InsertVerification(test.model)
 
 		if err == nil && m != test.model {
+			t.Error("Correct model was not returned.")
+		}
+
+		if err = mock.ExpectationsWereMet(); err != nil {
+			t.Error(err)
+		}
+	}
+}
+
+func TestEmailVerifyInsertNotification(t *testing.T) {
+	testCases := []struct {
+		user   int
+		err    error
+		expect error
+	}{
+		{
+			user:   123,
+			err:    nil,
+			expect: nil,
+		},
+		{
+			user:   123,
+			err:    errors.New("Dummy error"),
+			expect: ErrUnknown,
+		},
+	}
+
+	model := &EmailVerifyPostModel{
+		Email: "email@example.com",
+	}
+	for _, test := range testCases {
+		mockDb, mock, err := sqlmock.New()
+		if err != nil {
+			t.Fatal(err)
+		}
+		db := sqlx.NewDb(mockDb, "sqlmock")
+		mock.ExpectBegin()
+		tx, err := db.Beginx()
+		if err != nil {
+			t.Error(err)
+		}
+		p := EmailVerifyInsertProcessors{
+			db: db, tx: tx, handler: &JsonHandlerWithAuth{User: test.user},
+		}
+
+		q := mock.ExpectExec(
+			`INSERT INTO notifications \("user", type\) VALUES (.+)`,
+		).
+			WithArgs(test.user, NotificationTypeVerify)
+
+		if test.err != nil {
+			q.WillReturnError(test.err)
+			mock.ExpectRollback()
+		} else {
+			q.WillReturnResult(sqlmock.NewResult(1, 1))
+		}
+
+		m, err := p.InsertNotification(model)
+
+		if err == nil && m != model {
 			t.Error("Correct model was not returned.")
 		}
 

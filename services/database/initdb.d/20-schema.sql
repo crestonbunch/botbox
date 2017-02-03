@@ -131,6 +131,25 @@ CREATE TABLE recovery_secrets (
     "expires"   timestamptz NOT NULL DEFAULT now() + interval '7 days'
 );
 
+/**
+ * User notifications get pushed to this table, the actual content of the
+ * notifications are rendered clientside, so to add a new type of notifications
+ * requires changes to the web client.
+ */
+CREATE TABLE notifications (
+    "id" serial PRIMARY KEY,
+    "user" integer NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    "issued" timestamptz NOT NULL DEFAULT now(),
+    "read" timestamptz NULL DEFAULT NULL,
+    "dismissed" timestamptz NULL DEFAULT NULL,
+    "type" text NOT NULL,
+    "parameters" json NULL DEFAULT NULL
+);
+/* Notifications will normally be queried by user. */
+CREATE INDEX ON notifications ("user");
+/* We will normally be querying them in descending order. */
+CREATE INDEX ON notifications (issued DESC);
+
 /* Leagues represent a high-level game (e.g. Tron) and store the
  * information and server executable .zip file for running games.
  */

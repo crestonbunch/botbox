@@ -2,3 +2,16 @@
     User Variable Overrides
 *******************************/
 @attachedBoxShadow: 0px 0px 0px 0px @borderColor;
+
+@basicBorderSize: 0px;
+@basicColoredBorderSize: 0px;
+
+@basicBorder: 0px;
+
+@basicHoverBoxShadow:
+  0px 0px 0px 0px rgba(0,0,0,0) inset,
+  0px 0px 0px 0px rgba(0,0,0,0) inset;
+
+@basicDownBoxShadow:
+  0px 0px 0px 0px rgba(0, 0, 0, 0) inset,
+  0px 0px 0px 0px rgba(0, 0, 0, 0) inset;

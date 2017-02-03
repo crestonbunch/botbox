@@ -1,30 +1,9 @@
 import { observable, autorun, action } from "mobx";
 import "whatwg-fetch"
+import { Api } from "./api";
+import { SessionData, Notification } from "./models";
 
 const LS_USER_KEY = "LS_USER_KEY";
-
-export interface SessionData {
-  // The user's serial from the database.
-  id: number;
-
-  // The display name for the user.
-  name: string;
-
-  // The user's email address.
-  email: string;
-
-  // Name of the user's permission set.
-  permissionSet: string;
-
-  // List of permissions the user has.
-  permissions: string[];
-
-  // The user's session secret.
-  secret: string;
-
-  // The time the session expires.
-  expiration: Date;
-}
 
 /**
  * A data store that holds information about the currently logged-in user.
@@ -37,17 +16,19 @@ export class Store {
   // Information about the user's session
   @observable session: SessionData;
 
+  // Notifications fetch from the user backend
+  @observable notifications: Notification[] = [];
+
   // Restore session from local storage.
-  restoreSession = autorun(function() {
+  restoreSession = autorun(function () {
     let savedSession = localStorage.getItem(LS_USER_KEY);
     if (savedSession != null && !this.loggedIn) {
-      this.session = JSON.parse(savedSession) as SessionData;
-      this.loggedIn = true;
+      this.login(JSON.parse(savedSession) as SessionData);
     }
   }.bind(this))
 
   // Save a session to localstorage
-  saveSession = autorun(function() {
+  saveSession = autorun(function () {
     if (this.loggedIn) {
       localStorage.setItem(LS_USER_KEY, JSON.stringify(this.session));
     } else {
@@ -59,6 +40,10 @@ export class Store {
   @action login(session: SessionData) {
     this.session = session;
     this.loggedIn = true;
+    // fetch latest user notifications
+    Api.notifications(this.session.secret).then((n: Notification[]) => {
+      this.notifications = n;
+    });
   }
 
 }

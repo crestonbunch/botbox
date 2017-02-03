@@ -7,10 +7,11 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-// @Title insertEmailVerification
+// @Title Send Email verification
 // @Description send a verification email for a user
 // @Accept  json
-// @Param   email     query  string   true  "User email"
+// @Param   Authorization header  string    true  "Secret session token"
+// @Param   email         query   string    true  "User email"
 // @Success 200 plain
 // @Failure 400 plain
 // @Failure 500 plain
@@ -20,19 +21,21 @@ func NewEmailVerifyPostEndpoint(a *App) *Endpoint {
 	p := &EmailVerifyInsertProcessors{
 		db:      a.db,
 		emailer: a.emailer,
-		handler: &JsonHandler{
-			Target: func() interface{} { return &EmailVerifyPostModel{} },
+		handler: &JsonHandlerWithAuth{
+			Target:  func() interface{} { return &EmailVerifyPostModel{} },
+			session: &Session{db: a.db},
 		},
 	}
 
 	return &Endpoint{
 		Path:    "/email/verify",
 		Methods: []string{"POST"},
-		Handler: p.handler.Handle,
+		Handler: p.handler.HandleWithId,
 		Processors: []Processor{
 			p.ValidateEmail,
 			p.Begin,
 			p.InsertVerification,
+			p.InsertNotification,
 			p.SendVerification,
 			p.Commit,
 		},
@@ -44,7 +47,7 @@ type EmailVerifyInsertProcessors struct {
 	db      *sqlx.DB
 	tx      *sqlx.Tx
 	emailer EmailerModel
-	handler *JsonHandler
+	handler *JsonHandlerWithAuth
 	name    string
 	secret  string
 }
@@ -114,6 +117,23 @@ func (e *EmailVerifyInsertProcessors) InsertVerification(i interface{}) (interfa
 	}
 
 	e.secret = secret
+
+	return model, nil
+}
+
+func (e *EmailVerifyInsertProcessors) InsertNotification(i interface{}) (interface{}, *HttpError) {
+	model := i.(*EmailVerifyPostModel)
+
+	_, err := e.tx.Exec(
+		`INSERT INTO notifications ("user", type)  VALUES ($1, $2)`,
+		e.handler.User, NotificationTypeVerify,
+	)
+
+	if err != nil {
+		log.Println(err)
+		e.tx.Rollback()
+		return nil, ErrUnknown
+	}
 
 	return model, nil
 }
